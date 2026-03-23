@@ -354,7 +354,7 @@ fn parse_hex(value: &str) -> Vec<u8> {
         .strip_prefix("0x")
         .unwrap_or_else(|| panic!("hex values must use a 0x prefix: {value}"));
     assert!(
-        hex.len() % 2 == 0,
+        hex.len().is_multiple_of(2),
         "hex values must contain an even number of digits: {value}"
     );
     (0..hex.len())
