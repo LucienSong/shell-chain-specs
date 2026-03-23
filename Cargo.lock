@@ -291,6 +291,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "shell-network"
+version = "0.1.0"
+dependencies = [
+ "shell-consensus",
+ "shell-mempool",
+ "shell-primitives",
+]
+
+[[package]]
 name = "shell-primitives"
 version = "0.1.0"
 dependencies = [

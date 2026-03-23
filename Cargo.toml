@@ -6,6 +6,7 @@ members = [
     "crates/shell-execution",
     "crates/shell-consensus",
     "crates/shell-mempool",
+    "crates/shell-network",
 ]
 resolver = "2"
 

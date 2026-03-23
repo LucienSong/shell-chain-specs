@@ -30,6 +30,18 @@ Useful contributions at the current stage include:
 4. If you add code scaffolding, add or update the corresponding repository-local build/test instructions in the same change.
 5. Open a pull request with a clear explanation of what changed and why.
 
+## Anti-Drift Checklist
+
+Before opening a pull request, confirm that:
+
+- any boundary or behavior change is reflected in the local specs before code,
+- the crate graph changes only with a deliberate spec update,
+- cheap-first validation still happens before heavier execution or consensus work,
+- SSZ/root logic stays centralized instead of being reimplemented across crates,
+- post-quantum specifics remain inside `shell-crypto`,
+- peer policy and runtime concerns stay out of validation-focused crates,
+- placeholders are still labeled as provisional rather than presented as stable APIs.
+
 ## Expectations for Future Code Changes
 
 With the current workspace bootstrap in place, code changes should also:
@@ -48,7 +60,10 @@ Reviewers should check that a contribution:
 - improves local clarity,
 - keeps the repository self-contained,
 - does not overstate implementation maturity,
-- and stays consistent with the docs-first direction of the project.
+- stays consistent with the docs-first direction of the project,
+- links the relevant docs/spec delta for behavior changes,
+- adds or updates tests for the invariant it owns,
+- and keeps `cargo fmt --all`, `cargo check --workspace`, and `cargo test --workspace` green.
 
 ## Commit Messages
 

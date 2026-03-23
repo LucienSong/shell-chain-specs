@@ -1,0 +1,13 @@
+[package]
+name = "shell-network"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+shell-consensus = { path = "../shell-consensus" }
+shell-mempool = { path = "../shell-mempool" }
+shell-primitives = { path = "../shell-primitives" }

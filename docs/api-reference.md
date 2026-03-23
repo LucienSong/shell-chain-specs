@@ -5,7 +5,7 @@
 ## Current Status
 
 There is **no generated Rust API documentation checked into the repository yet**, even though the repository now contains a buildable workspace bootstrap.
-Today, `shell-primitives` exists as a real crate and `shell-crypto` / `shell-state` / `shell-execution` / `shell-consensus` exist as early interface crates, but this document still captures the broader public surfaces the workspace is expected to expose as implementation continues.
+Today, `shell-primitives` exists as a real crate and `shell-crypto` / `shell-state` / `shell-execution` / `shell-mempool` / `shell-consensus` / `shell-network` exist as early interface crates, but this document still captures the broader public surfaces the workspace is expected to expose as implementation continues.
 
 ## Stability Note
 
@@ -73,7 +73,7 @@ Higher layers are expected to expose structured validation entry points for:
 - witness and proof verification,
 - heavy execution and output-root calculation,
 - block import orchestration,
-- peer-handling consequences for malformed versus merely excessive traffic.
+- peer-handling consequences for malformed versus merely excessive traffic, including early `shell-network` announcement filtering, fetch policy, and reputation scaffolding.
 
 The public contract here is mostly about clean layering and error taxonomy rather than about one monolithic "validate everything" function.
 
@@ -93,7 +93,7 @@ Those entry points are planned, not currently implemented.
 The repository does not yet provide:
 
 - generated `cargo doc` output,
-- a fully stable crate list in `Cargo.toml`,
+- a fully stable crate list in `Cargo.toml` (the workspace now includes `shell-network`, but the top-level crate tree is still incomplete),
 - versioned Rust APIs,
 - runnable node or CLI binaries.
 
