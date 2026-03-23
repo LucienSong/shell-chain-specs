@@ -1,0 +1,15 @@
+[package]
+name = "shell-consensus"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+shell-crypto = { path = "../shell-crypto" }
+shell-execution = { path = "../shell-execution" }
+shell-mempool = { path = "../shell-mempool" }
+shell-primitives = { path = "../shell-primitives" }
+shell-state = { path = "../shell-state" }

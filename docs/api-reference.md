@@ -5,7 +5,7 @@
 ## Current Status
 
 There is **no generated Rust API documentation checked into the repository yet**, even though the repository now contains a buildable workspace bootstrap.
-Today, `shell-primitives` exists as a real crate and `shell-crypto` / `shell-state` / `shell-execution` exist as early interface crates, but this document still captures the broader public surfaces the workspace is expected to expose as implementation continues.
+Today, `shell-primitives` exists as a real crate and `shell-crypto` / `shell-state` / `shell-execution` / `shell-consensus` exist as early interface crates, but this document still captures the broader public surfaces the workspace is expected to expose as implementation continues.
 
 ## Stability Note
 

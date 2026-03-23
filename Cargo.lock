@@ -251,6 +251,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "shell-consensus"
+version = "0.1.0"
+dependencies = [
+ "shell-crypto",
+ "shell-execution",
+ "shell-mempool",
+ "shell-primitives",
+ "shell-state",
+]
+
+[[package]]
 name = "shell-crypto"
 version = "0.1.0"
 dependencies = [

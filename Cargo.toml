@@ -4,6 +4,7 @@ members = [
     "crates/shell-crypto",
     "crates/shell-state",
     "crates/shell-execution",
+    "crates/shell-consensus",
     "crates/shell-mempool",
 ]
 resolver = "2"
