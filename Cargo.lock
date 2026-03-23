@@ -255,7 +255,18 @@ name = "shell-crypto"
 version = "0.1.0"
 dependencies = [
  "ed25519-dalek",
+ "serde",
+ "serde_json",
  "shell-primitives",
+]
+
+[[package]]
+name = "shell-execution"
+version = "0.1.0"
+dependencies = [
+ "sha2",
+ "shell-primitives",
+ "shell-state",
 ]
 
 [[package]]
@@ -279,6 +290,8 @@ dependencies = [
 name = "shell-state"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
  "sha2",
  "shell-primitives",
 ]

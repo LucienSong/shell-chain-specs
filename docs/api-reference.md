@@ -5,7 +5,7 @@
 ## Current Status
 
 There is **no generated Rust API documentation checked into the repository yet**, even though the repository now contains a buildable workspace bootstrap.
-Today, `shell-primitives` exists as a real crate and `shell-crypto` / `shell-state` exist as early interface crates, but this document still captures the broader public surfaces the workspace is expected to expose as implementation continues.
+Today, `shell-primitives` exists as a real crate and `shell-crypto` / `shell-state` / `shell-execution` exist as early interface crates, but this document still captures the broader public surfaces the workspace is expected to expose as implementation continues.
 
 ## Stability Note
 
@@ -47,6 +47,12 @@ The crypto layer is expected to provide:
 - hashing boundaries shared with the primitives layer.
 
 Callers should depend on stable traits rather than on concrete post-quantum libraries.
+
+For validator-path verification, higher layers should also depend on a lower-layer proposer-credential resolver boundary rather than on a concrete validator-state backend. In this repository milestone, the shared contract is effectively:
+
+- input: `block_root` plus an optional proposer-index hint,
+- output: `(scheme_id, public_key_material)`,
+- ownership: resolver trait in `shell-primitives`, orchestration in `shell-consensus`, signature dispatch in `shell-crypto`.
 
 ### 4. State and Witness Interfaces
 

@@ -1,5 +1,5 @@
-use crate::errors::PrimitiveError;
-use crate::types::{ChainId, ExecutionAddress, Root, U256};
+use crate::errors::{PrimitiveError, ProposerCredentialResolutionError};
+use crate::types::{ChainId, ExecutionAddress, MockProgressiveByteList, Root, U256};
 
 pub trait ProtocolObject {
     fn canonical_root(&self) -> Result<Root, PrimitiveError>;
@@ -14,6 +14,20 @@ pub trait TransactionMetadata {
 pub trait StateMetadata {
     fn account_nonce(&self, address: &ExecutionAddress) -> Option<u64>;
     fn account_balance(&self, address: &ExecutionAddress) -> Option<U256>;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProposerCredential {
+    pub scheme_id: u8,
+    pub public_key_material: MockProgressiveByteList,
+}
+
+pub trait ProposerCredentialResolver {
+    fn resolve_proposer_credential(
+        &self,
+        block_root: &Root,
+        proposer_index_hint: Option<u64>,
+    ) -> Result<ProposerCredential, ProposerCredentialResolutionError>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

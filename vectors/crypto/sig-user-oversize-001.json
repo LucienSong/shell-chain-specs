@@ -1,0 +1,22 @@
+{
+  "id": "sig-user-oversize-001",
+  "category": "crypto",
+  "rule": "ed25519_dispatch",
+  "description": "A transaction-authorization signature larger than the Ed25519 fixed-size contract is rejected before cryptographic verification.",
+  "input": {
+    "scheme_id": 0,
+    "public_key_hex": "0x8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+    "signing_root_hex": "0xabababababababababababababababababababababababababababababababab",
+    "signature_hex": "0x1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+    "verification_path": "transaction_authorization"
+  },
+  "expected_outcome": "reject",
+  "expected_error": {
+    "kind": "SignatureSizeExceeded",
+    "max_size": 64,
+    "actual_size": 65,
+    "path": "transaction_authorization"
+  },
+  "owned_by": "shell-crypto",
+  "notes": "For Ed25519 the dispatcher resolves the effective max size to 64 bytes, so the size guard fires before verifier parsing or signature math."
+}

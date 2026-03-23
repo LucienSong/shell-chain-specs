@@ -1,0 +1,40 @@
+{
+  "id": "block-sidecar-root-mismatch-001",
+  "category": "block",
+  "rule": "sidecar_commitment",
+  "description": "A block sidecar whose computed commitment root differs from the header execution_witnesses_root is rejected before execution begins.",
+  "input": {
+    "header": {
+      "block_number": 1,
+      "timestamp": 1000000,
+      "proposer_index": 0,
+      "parent_root": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "transactions_root": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "execution_witnesses_root": "0x5555555555555555555555555555555555555555555555555555555555555555",
+      "state_root": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "receipts_root": "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "witness_bytes": 160,
+      "proposer_signature_hex": "0x"
+    },
+    "computed_block_root": "0x7777777777777777777777777777777777777777777777777777777777777777",
+    "sidecar": {
+      "block_root": "0x7777777777777777777777777777777777777777777777777777777777777777",
+      "witness_vector_ids": [
+        "witness-proof-valid-001"
+      ]
+    },
+    "computed_sidecar_root": "0x9999999999999999999999999999999999999999999999999999999999999999"
+  },
+  "expected_outcome": "reject",
+  "expected_error": {
+    "kind": "SidecarMismatch",
+    "expected_root": "0x5555555555555555555555555555555555555555555555555555555555555555",
+    "actual_root": "0x9999999999999999999999999999999999999999999999999999999999999999"
+  },
+  "owned_by": "shell-consensus",
+  "transactions_root": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "execution_witnesses_root": "0x5555555555555555555555555555555555555555555555555555555555555555",
+  "state_root": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "receipts_root": "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "notes": "This vector isolates sidecar commitment failure while holding the sidecar.block_root match fixed. A future consensus importer should fail it at the sidecar-binding stage, before any execution or post-state root comparison."
+}

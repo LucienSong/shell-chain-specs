@@ -1,0 +1,36 @@
+{
+  "id": "witness-proof-valid-001",
+  "category": "witness",
+  "rule": "reference_proof_reconstruction",
+  "description": "A committed witness that matches a materialized reference-state leaf can be verified against the expected state root.",
+  "input": {
+    "proof_shape_kind": "reference_empty",
+    "materialized_state": [
+      {
+        "key": {
+          "kind": "account_header",
+          "address": "0x1111111111111111111111111111111111111111",
+          "canonical_key_hex": "0x000000000000000000000000001111111111111111111111111111111111111111"
+        },
+        "leaf_value_hex": "0xdeadbeef"
+      }
+    ],
+    "expected_state_root": "0xc29b19be933adb914c312f0ef305668d27189058d8fbde447d5c36d0e81fce1b",
+    "witness": {
+      "key": {
+        "kind": "account_header",
+        "address": "0x1111111111111111111111111111111111111111",
+        "canonical_key_hex": "0x000000000000000000000000001111111111111111111111111111111111111111"
+      },
+      "leaf_value_hex": "0xdeadbeef",
+      "proof_hex": []
+    }
+  },
+  "expected_outcome": "accept",
+  "owned_by": "shell-state",
+  "state_keys": [
+    "0x000000000000000000000000001111111111111111111111111111111111111111"
+  ],
+  "proof_shape_kind": "reference_empty",
+  "notes": "This is grounded in the current in-memory reference backend: the committed witness carries no interpreted proof bytes, and verification succeeds because the derived local proof path matches the materialized state leaf and reference root."
+}

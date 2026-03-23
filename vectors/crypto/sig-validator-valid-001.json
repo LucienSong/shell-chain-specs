@@ -1,0 +1,16 @@
+{
+  "id": "sig-validator-valid-001",
+  "category": "crypto",
+  "rule": "ed25519_dispatch",
+  "description": "A valid Ed25519 signature on the validator-message path verifies successfully through the same dispatcher contract.",
+  "input": {
+    "scheme_id": 0,
+    "public_key_hex": "0x8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+    "signing_root_hex": "0x5555555555555555555555555555555555555555555555555555555555555555",
+    "signature_hex": "0x9c982c5b3e535a01abc689e041e24f1db10f30214c9750918e1b5a91a0a5b466e8163f02942cfcd1fa02741473800fd7717c108986588e573cfc347d38e62d03",
+    "verification_path": "validator_message"
+  },
+  "expected_outcome": "accept",
+  "owned_by": "shell-crypto",
+  "notes": "This keeps validator-path verification under the same vector-driven harness without freezing any higher-level validator credential policy."
+}

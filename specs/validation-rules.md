@@ -138,6 +138,13 @@ For transaction authorizations, the caller flow is:
 4. `shell-mempool` passes `(scheme_id, public_key_material, signing_root, signature)` to `shell-crypto`.
 5. `shell-crypto` selects the verifier, performs byte-bound checks, then runs the cryptographic verification.
 
+Repository-local closure:
+
+- `DOMAIN_TX_SHELL = [0x01, 0x00, 0x00, 0x00]`
+- `DOMAIN_VALIDATOR_MESSAGE = [0x02, 0x00, 0x00, 0x00]`
+
+These tags are now frozen locally so `shell-primitives` and `shell-mempool` share one canonical signing-root path.
+
 Failure handling:
 - Unknown or unsupported `scheme_id`: reject the transaction. On a P2P path this is disconnect-grade because the peer sent an invalid protocol object.
 - `payload_root` mismatch: reject immediately without calling the verifier; this is cheaper than cryptography and should be treated as malformed.
@@ -151,6 +158,13 @@ Implementation responsibilities are:
 - `shell-consensus` computes `block_root = hash_tree_root(header)`.
 - `shell-consensus` resolves the active proposer credential from validator state.
 - `shell-consensus` delegates verification to `shell-crypto` using a validator-specific domain.
+
+Repository-local closure for this stage:
+
+- B1 consumes proposer credentials through a shared resolver boundary in `shell-primitives`:
+  `resolve_proposer_credential(block_root, proposer_index_hint) -> (scheme_id, public_key_material)`.
+- The repository currently treats validator-path verification as **single-proposer / single-signature** for one block header at a time.
+- `scheme_id` and `public_key_material` are sufficient to dispatch verification through `shell-crypto`; the underlying credential lifecycle remains intentionally unresolved.
 
 Open items that must remain explicit in code and docs:
 - The exact validator credential object model is still pending closure around validator credential separation.

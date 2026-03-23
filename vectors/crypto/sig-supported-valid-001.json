@@ -1,0 +1,16 @@
+{
+  "id": "sig-supported-valid-001",
+  "category": "crypto",
+  "rule": "ed25519_dispatch",
+  "description": "A valid Ed25519 signature on the transaction-authorization path verifies successfully through the registry dispatcher.",
+  "input": {
+    "scheme_id": 0,
+    "public_key_hex": "0x8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+    "signing_root_hex": "0xabababababababababababababababababababababababababababababababab",
+    "signature_hex": "0xb5cb8d5f58cd3aea4e44d1ebbebb386bda26e5a3996fc0f13193c84ec689d1fd61c59e7056d6b3a1e789fff8eb95202b8323de5c32e61487f41119cece42ec01",
+    "verification_path": "transaction_authorization"
+  },
+  "expected_outcome": "accept",
+  "owned_by": "shell-crypto",
+  "notes": "Deterministic Ed25519 fixture derived from the 32-byte private key 0x01..01 and a 32-byte signing root of 0xab..ab."
+}

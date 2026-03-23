@@ -1,8 +1,8 @@
 use shell_crypto::{CryptoError, SignatureDispatcher, SignatureVerificationRequest};
 use shell_primitives::{
-    check_authorization_count, check_authorization_payload_roots, check_user_signature_size,
-    Bytes4, PrimitiveError, ProtocolObject, Root, SigningData, TransactionEnvelope,
-    TransactionMetadata, TransactionPayload, TransactionPayloadSsz,
+    build_signing_data, check_authorization_count, check_authorization_payload_roots,
+    check_user_signature_size, Bytes4, PrimitiveError, ProtocolObject, Root, SigningData,
+    TransactionEnvelope, TransactionMetadata, TransactionPayload, TransactionPayloadSsz,
 };
 
 use crate::errors::{
@@ -20,25 +20,32 @@ pub struct NoncePolicy {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TransactionAuthorizationDomain {
     #[default]
-    Pending,
+    Canonical,
     Explicit(Bytes4),
 }
 
 impl TransactionAuthorizationDomain {
     pub fn signing_root(self, payload_root: Root) -> Result<Root, SigningRootUnavailableError> {
-        match self {
-            Self::Pending => Err(SigningRootUnavailableError {
-                context: "transaction authorization domain_type remains unresolved in the current spec set",
-            }),
+        let signing_data = match self {
+            Self::Canonical => build_signing_data(
+                payload_root,
+                shell_primitives::DomainSelector::TransactionAuthorization,
+            )
+            .map_err(|_| SigningRootUnavailableError {
+                context: "failed to construct signing_root from the canonical transaction authorization domain",
+            })?,
             Self::Explicit(domain_type) => SigningData {
                 object_root: payload_root,
                 domain_type,
-            }
+            },
+        };
+
+        signing_data
             .canonical_root()
             .map_err(|_| SigningRootUnavailableError {
-                context: "failed to construct signing_root from explicit transaction domain bytes",
-            }),
-        }
+                context:
+                    "failed to construct signing_root from transaction authorization domain bytes",
+            })
     }
 }
 

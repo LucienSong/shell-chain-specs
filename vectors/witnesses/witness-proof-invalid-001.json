@@ -1,0 +1,42 @@
+{
+  "id": "witness-proof-invalid-001",
+  "category": "witness",
+  "rule": "reference_proof_reconstruction",
+  "description": "A reference-backend witness that carries unexpected committed proof bytes is rejected as an unsupported proof shape.",
+  "input": {
+    "proof_shape_kind": "unexpected_committed_bytes",
+    "materialized_state": [
+      {
+        "key": {
+          "kind": "account_header",
+          "address": "0x1111111111111111111111111111111111111111",
+          "canonical_key_hex": "0x000000000000000000000000001111111111111111111111111111111111111111"
+        },
+        "leaf_value_hex": "0xdeadbeef"
+      }
+    ],
+    "expected_state_root": "0xc29b19be933adb914c312f0ef305668d27189058d8fbde447d5c36d0e81fce1b",
+    "witness": {
+      "key": {
+        "kind": "account_header",
+        "address": "0x1111111111111111111111111111111111111111",
+        "canonical_key_hex": "0x000000000000000000000000001111111111111111111111111111111111111111"
+      },
+      "leaf_value_hex": "0xdeadbeef",
+      "proof_hex": [
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ]
+    }
+  },
+  "expected_outcome": "reject",
+  "expected_error": {
+    "kind": "UnsupportedProofShape",
+    "context": "reference backend derives proof paths locally and does not interpret committed proof bytes"
+  },
+  "owned_by": "shell-state",
+  "state_keys": [
+    "0x000000000000000000000000001111111111111111111111111111111111111111"
+  ],
+  "proof_shape_kind": "unexpected_committed_bytes",
+  "notes": "This vector stays honest about current repository behavior: detailed witness proof-node layout is still provisional, so the reference backend rejects any non-empty committed proof payload instead of pretending to decode a finalized wire proof."
+}

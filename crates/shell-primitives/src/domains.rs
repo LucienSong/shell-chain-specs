@@ -2,6 +2,8 @@ use crate::errors::DomainError;
 use crate::types::{Bytes4, Root, SigningData};
 
 pub const DOMAIN_TYPE_WIDTH: usize = 4;
+pub const DOMAIN_TX_SHELL: Bytes4 = [0x01, 0x00, 0x00, 0x00];
+pub const DOMAIN_VALIDATOR_MESSAGE: Bytes4 = [0x02, 0x00, 0x00, 0x00];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DomainSelector {
@@ -17,10 +19,10 @@ impl DomainSelector {
         }
     }
 
-    // The specs freeze the 4-byte width but not the concrete tag bytes yet.
     pub fn domain_type(self) -> Result<Bytes4, DomainError> {
-        Err(DomainError {
-            domain_name: self.label(),
+        Ok(match self {
+            Self::TransactionAuthorization => DOMAIN_TX_SHELL,
+            Self::ValidatorMessage => DOMAIN_VALIDATOR_MESSAGE,
         })
     }
 }

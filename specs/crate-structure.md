@@ -162,6 +162,11 @@ Must not own:
 - protocol-type redefinitions,
 - CLI/runtime startup wiring.
 
+Repository-local closure note:
+
+- `shell-consensus` should consume proposer credentials through a lower-layer resolver trait from `shell-primitives`, not through hard-wired account-path logic or a concrete validator-state backend.
+- The exact validator credential lifecycle and storage model remain deferred; only the resolver boundary is closed locally at this stage.
+
 ### 3.7 `shell-network`
 
 Owns peer-facing behavior:

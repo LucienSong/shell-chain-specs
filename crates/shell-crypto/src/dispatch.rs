@@ -10,6 +10,8 @@ use crate::traits::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DispatcherConfig {
     pub user_path_max_signature_size: usize,
+    // This remains a configurable local transport guard until the validator path
+    // gets a frozen consensus-invalidating size rule.
     pub validator_path_max_signature_size: Option<usize>,
 }
 

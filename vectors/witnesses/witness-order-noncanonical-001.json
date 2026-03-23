@@ -1,0 +1,43 @@
+{
+  "id": "witness-order-noncanonical-001",
+  "category": "witness",
+  "rule": "canonical_state_key_ordering",
+  "description": "A witness list whose StateKeys are not strictly increasing in canonical byte order is rejected before any proof work starts.",
+  "input": {
+    "ordering_is_canonical": false,
+    "proof_shape_kind": "reference_empty",
+    "witnesses": [
+      {
+        "key": {
+          "kind": "raw_tree_key",
+          "raw_key": "0x9999999999999999999999999999999999999999999999999999999999999999",
+          "canonical_key_hex": "0x039999999999999999999999999999999999999999999999999999999999999999"
+        },
+        "leaf_value_hex": "0xbb",
+        "proof_hex": []
+      },
+      {
+        "key": {
+          "kind": "account_header",
+          "address": "0x1111111111111111111111111111111111111111",
+          "canonical_key_hex": "0x000000000000000000000000001111111111111111111111111111111111111111"
+        },
+        "leaf_value_hex": "0xdeadbeef",
+        "proof_hex": []
+      }
+    ]
+  },
+  "expected_outcome": "reject",
+  "expected_error": {
+    "kind": "NonCanonicalWitnessOrdering",
+    "index": 1,
+    "context": "witness keys must be strictly increasing in canonical StateKey order"
+  },
+  "owned_by": "shell-state",
+  "state_keys": [
+    "0x039999999999999999999999999999999999999999999999999999999999999999",
+    "0x000000000000000000000000001111111111111111111111111111111111111111"
+  ],
+  "proof_shape_kind": "reference_empty",
+  "notes": "The only failure here is ordering: RawTreeKey sorts after AccountHeader under the shared byte comparator, so shell-state must reject at the ordering gate before any reconstruction path is attempted."
+}

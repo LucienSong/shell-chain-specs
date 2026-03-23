@@ -1,0 +1,20 @@
+{
+  "id": "sig-unsupported-scheme-001",
+  "category": "crypto",
+  "rule": "dispatcher_lookup",
+  "description": "A scheme_id with no registered verifier is rejected before any scheme-specific verification work starts.",
+  "input": {
+    "scheme_id": 99,
+    "public_key_hex": "0x8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+    "signing_root_hex": "0xabababababababababababababababababababababababababababababababab",
+    "signature_hex": "0xb5cb8d5f58cd3aea4e44d1ebbebb386bda26e5a3996fc0f13193c84ec689d1fd61c59e7056d6b3a1e789fff8eb95202b8323de5c32e61487f41119cece42ec01",
+    "verification_path": "transaction_authorization"
+  },
+  "expected_outcome": "reject",
+  "expected_error": {
+    "kind": "UnsupportedScheme",
+    "scheme_id": 99
+  },
+  "owned_by": "shell-crypto",
+  "notes": "This covers the fast dispatcher rejection path independently of the Ed25519 verifier implementation."
+}

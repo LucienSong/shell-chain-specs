@@ -5,7 +5,7 @@
 ## Current Status
 
 `shell-chain` is currently a **docs-first repository**.
-It now includes a **minimal Rust workspace bootstrap** with `shell-primitives` and early `shell-crypto` / `shell-state` interface crates.
+It now includes a **minimal Rust workspace bootstrap** with `shell-primitives` and early `shell-crypto` / `shell-state` / `shell-execution` interface crates.
 It still does not provide a runnable node or a fully scaffolded crate tree, so the current repository milestone is to extend that bootstrap carefully from the documented specs.
 
 ## What You Can Do Today

@@ -202,8 +202,15 @@ The Rust binding should therefore make it difficult to:
 
 ### 3.3 `SigningData` field contracts
 
-**`domain_type` width.**
-`domain_type` is a fixed **4-byte** tag (`Bytes4 = Vector<u8, 4>`).  The 4-byte width is the established convention for domain-type tags in SSZ-based signing flows.  Using a wider type (e.g. `Bytes32`) for this field would produce a different `hash_tree_root(SigningData)` than any conforming counterparty and must be rejected.  The actual tag value for each domain is defined by the upstream domain constants, which are not frozen in this spec; only the 4-byte width is fixed here.
+**`domain_type` width and repository-local constants.**
+`domain_type` is a fixed **4-byte** tag (`Bytes4 = Vector<u8, 4>`).  The 4-byte width is the established convention for domain-type tags in SSZ-based signing flows.  Using a wider type (e.g. `Bytes32`) for this field would produce a different `hash_tree_root(SigningData)` than any conforming counterparty and must be rejected.
+
+For the current repository milestone, the local binding is:
+
+- `DOMAIN_TX_SHELL = [0x01, 0x00, 0x00, 0x00]`
+- `DOMAIN_VALIDATOR_MESSAGE = [0x02, 0x00, 0x00, 0x00]`
+
+These values are now frozen for this repository so lower-layer crates can share one signing-root construction path.  If an upstream protocol source later chooses different values, the repository must treat that as an intentional compatibility change rather than leaving the bytes implicit.
 
 **`object_root` and `Authorization.payload_root`.**
 When a signer constructs a `SigningData` to produce or verify an `Authorization`, the following identity must hold:
@@ -214,6 +221,43 @@ SigningData.object_root == Authorization.payload_root
 ```
 
 `Authorization.payload_root` stores the canonical Merkle root of the `TransactionPayload` union computed through `TransactionPayloadSsz` (see §3.1).  `SigningData.object_root` carries that same root as the "what is being signed" field.  Implementations must use the single shared `TransactionPayloadSsz` codec path for both root calculations; a mismatch between the codec used during signing and the one used during authorization verification is a correctness bug, not a configuration difference.
+
+### 3.4 Repository-local closure for proposer credentials
+
+Validator-path signing now has one repository-local closure even though the full validator lifecycle remains open: the **credential lookup interface** is fixed, but the **credential source and persistence model** are not.
+
+The minimal shared shape is:
+
+```rust
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProposerCredential {
+    pub scheme_id: u8,
+    pub public_key_material: MockProgressiveByteList,
+}
+
+pub trait ProposerCredentialResolver {
+    fn resolve_proposer_credential(
+        &self,
+        block_root: &Root,
+        proposer_index_hint: Option<u64>,
+    ) -> Result<ProposerCredential, ProposerCredentialResolutionError>;
+}
+```
+
+Repository-local meaning:
+
+- `scheme_id` is the validator-path signature family selector consumed by `shell-crypto`.
+- `public_key_material` stays opaque bytes at this layer so the repository does not prematurely freeze a validator-key encoding beyond what the selected scheme requires.
+- `block_root` is provided because a resolver may need block-context-aware scheduling or epoch snapshots.
+- `proposer_index_hint` is optional because the eventual block-header shape may carry a direct proposer identifier, but the repository does not yet freeze that header field here.
+
+This closes only the **resolver boundary**. It does **not** close:
+
+- the validator credential lifecycle,
+- whether validator credentials are stored in consensus state, execution state, or an external registry,
+- richer threshold / multisignature validator models.
+
+Those remain deferred and must stay behind the resolver trait rather than leaking into low-level cryptographic dispatch.
 
 ## 4. State-layer bindings
 
@@ -353,10 +397,18 @@ This matters because witness compression and canonical sidecar encoding are stil
 1. **`StateKeyBytes` wrapper** — define a newtype that serializes `StateKey` to a canonical byte sequence (e.g. a tag byte followed by the variant fields), implements `SimpleSerialize` on the wrapper, and is the field type stored in `StateWitness` and `StatePatch` on the wire.  The ergonomic `StateKey` enum is then only used in memory after decoding.
 2. **Custom `SimpleSerialize` impl** — write a hand-rolled `ssz_rs::Serialize` / `Deserialize` / `HashTreeRoot` impl for `StateKey` directly if the encoding shape is stable enough to commit to.
 
-Either approach is acceptable at the first scaffold stage.  The canonical ordering comparator required by §4.3 must operate on the same byte key that the SSZ layer stores, so whichever encoding is chosen must be the one reflected in the ordering check.
+This repository now chooses the **`StateKeyBytes` wrapper** path at the first scaffold stage.  The canonical wire byte sequence is:
+
+- `AccountHeader`: `0x00 || canonicalize_execution_address(address)`
+- `StorageSlot`: `0x01 || canonicalize_execution_address(address) || slot`
+- `CodeChunk`: `0x02 || canonicalize_execution_address(address) || chunk_index.to_be_bytes()`
+- `RawTreeKey`: `0x03 || raw_tree_key`
+- `Stem`: `0x04 || stem`
+
+The canonical ordering comparator required by §4.3 operates on exactly this byte sequence.  The ergonomic `StateKey` enum remains the in-memory representation, while `StateKeyBytes` is the shared byte path reused by ordering checks and any future SSZ wrapper work.
 
 **`StatePatch.new_values` nesting.**
-`MockProgressiveList<MockProgressiveByteList>` expands to `List<List<u8, 1048576>, 8192>` — a variable-length list whose elements are themselves variable-length.  The SSZ specification allows this structure (outer list uses offset tables to encode variable-length elements), but `ssz_rs` does not support it via the derive macro.  `StatePatch` therefore requires a custom `SimpleSerialize` implementation.  The same mock-container discipline from §2.1 applies: do not interpret `1048576` or `8192` as protocol budget constants.
+`MockProgressiveList<MockProgressiveByteList>` expands to `List<List<u8, 1048576>, 8192>` — a variable-length list whose elements are themselves variable-length.  The SSZ specification allows this structure (outer list uses offset tables to encode variable-length elements), but `ssz_rs` does not support it via the derive macro.  `StatePatch` therefore requires a custom `SimpleSerialize` implementation.  The repository-local closure for the path shape is that `StatePatch.accesses` must use the shared `StateKeyBytes` encoding above, and `StatePatch.new_values` must remain a nested variable-length list handled by one shared custom implementation rather than per-struct re-derivations.  The same mock-container discipline from §2.1 applies: do not interpret `1048576` or `8192` as protocol budget constants.
 
 **`canonicalize_execution_address` placement.**
 This function performs the state-key derivation for execution addresses (left-padding a 20-byte address to a 32-byte tree key).  It belongs in `shell-state::keys` (see `crate-structure.md §3.3` and `§6`).  It must not be re-implemented inline elsewhere; all address-to-tree-key conversions in `shell-state`, `shell-execution`, and `shell-consensus` must call the same shared function.  Placing it outside `shell-state` in a lower crate (e.g. `shell-primitives`) is also acceptable if the function is needed there first, provided it remains a single implementation that higher crates re-use rather than re-derive.

@@ -1,0 +1,34 @@
+{
+  "id": "block-transactions-root-match-001",
+  "category": "block",
+  "rule": "transactions_root_binding",
+  "description": "A block body whose transaction list root matches the header transactions_root passes the body-to-header binding check.",
+  "input": {
+    "header": {
+      "block_number": 1,
+      "timestamp": 1000000,
+      "proposer_index": 0,
+      "parent_root": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "transactions_root": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "execution_witnesses_root": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "state_root": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "receipts_root": "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "witness_bytes": 160,
+      "proposer_signature_hex": "0x"
+    },
+    "body": {
+      "transaction_vector_ids": [
+        "tx-basic-valid-001",
+        "tx-create-valid-001"
+      ]
+    },
+    "computed_transactions_root": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "expected_outcome": "accept",
+  "owned_by": "shell-consensus",
+  "transactions_root": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "execution_witnesses_root": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "state_root": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "receipts_root": "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "notes": "This is a block-binding fixture for the future consensus harness. Until canonical block containers land, the vector intentionally focuses on body/header root equality using repository-local transaction fixture references rather than inventing a finalized block wire codec."
+}

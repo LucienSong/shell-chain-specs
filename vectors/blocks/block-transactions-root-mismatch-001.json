@@ -1,0 +1,38 @@
+{
+  "id": "block-transactions-root-mismatch-001",
+  "category": "block",
+  "rule": "transactions_root_binding",
+  "description": "A block body whose computed transaction list root differs from the header transactions_root is rejected before sidecar or execution work starts.",
+  "input": {
+    "header": {
+      "block_number": 1,
+      "timestamp": 1000000,
+      "proposer_index": 0,
+      "parent_root": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "transactions_root": "0x2222222222222222222222222222222222222222222222222222222222222222",
+      "execution_witnesses_root": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "state_root": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "receipts_root": "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "witness_bytes": 160,
+      "proposer_signature_hex": "0x"
+    },
+    "body": {
+      "transaction_vector_ids": [
+        "tx-basic-valid-001"
+      ]
+    },
+    "computed_transactions_root": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "expected_outcome": "reject",
+  "expected_error": {
+    "kind": "TransactionsRootMismatch",
+    "expected_root": "0x2222222222222222222222222222222222222222222222222222222222222222",
+    "actual_root": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "owned_by": "shell-consensus",
+  "transactions_root": "0x2222222222222222222222222222222222222222222222222222222222222222",
+  "execution_witnesses_root": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "state_root": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "receipts_root": "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "notes": "This vector isolates the cheap body/header binding failure. A future consensus importer should reject it before any sidecar binding, witness reconstruction, or execution stage is entered."
+}

@@ -1,0 +1,35 @@
+{
+  "id": "block-sidecar-root-match-001",
+  "category": "block",
+  "rule": "sidecar_commitment",
+  "description": "A block sidecar whose committed root and block_root both match the declared header bindings passes the sidecar commitment gate.",
+  "input": {
+    "header": {
+      "block_number": 1,
+      "timestamp": 1000000,
+      "proposer_index": 0,
+      "parent_root": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "transactions_root": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "execution_witnesses_root": "0x5555555555555555555555555555555555555555555555555555555555555555",
+      "state_root": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "receipts_root": "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "witness_bytes": 160,
+      "proposer_signature_hex": "0x"
+    },
+    "computed_block_root": "0x7777777777777777777777777777777777777777777777777777777777777777",
+    "sidecar": {
+      "block_root": "0x7777777777777777777777777777777777777777777777777777777777777777",
+      "witness_vector_ids": [
+        "witness-proof-valid-001"
+      ]
+    },
+    "computed_sidecar_root": "0x5555555555555555555555555555555555555555555555555555555555555555"
+  },
+  "expected_outcome": "accept",
+  "owned_by": "shell-consensus",
+  "transactions_root": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "execution_witnesses_root": "0x5555555555555555555555555555555555555555555555555555555555555555",
+  "state_root": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "receipts_root": "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "notes": "This fixture models the double-binding expected by future block import: the sidecar must bind to the header block root and its committed witness root must equal header.execution_witnesses_root. The witness payload is referenced through a repository-local witness fixture rather than a finalized block-sidecar wire codec."
+}

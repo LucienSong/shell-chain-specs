@@ -11,19 +11,24 @@ pub mod traits;
 pub mod types;
 pub mod validation;
 
-pub use crate::domains::{build_signing_data, DomainSelector, DOMAIN_TYPE_WIDTH};
+pub use crate::domains::{
+    build_signing_data, DomainSelector, DOMAIN_TX_SHELL, DOMAIN_TYPE_WIDTH,
+    DOMAIN_VALIDATOR_MESSAGE,
+};
 pub use crate::errors::{
     AuthorizationCountError, DomainError, MalformedSszError, PayloadRootMismatchError,
-    PrimitiveError, SignatureSizeExceededError, SigningRootConstructionError,
-    UnsupportedPayloadVariant,
+    PrimitiveError, ProposerCredentialResolutionError, SignatureSizeExceededError,
+    SigningRootConstructionError, UnsupportedPayloadVariant,
 };
 pub use crate::traits::{
-    ProtocolObject, StateMetadata, TransactionMetadata, ValidationOutcome, ValidationStage,
+    ProposerCredential, ProposerCredentialResolver, ProtocolObject, StateMetadata,
+    TransactionMetadata, ValidationOutcome, ValidationStage,
 };
 pub use crate::types::{
-    canonicalize_execution_address, Authorization, BasicFeesPerGas, BasicTransactionPayload,
-    Bytes31, Bytes32, Bytes4, ChainId, CreateTransactionPayload, ExecutionAddress, GasPrice,
-    MockProgressiveByteList, MockProgressiveList, Root, SigningData, StateKey, StateWitness,
+    canonicalize_execution_address, compare_state_keys, encode_state_key, Authorization,
+    BasicFeesPerGas, BasicTransactionPayload, Bytes31, Bytes32, Bytes4, ChainId,
+    CreateTransactionPayload, ExecutionAddress, GasPrice, MockProgressiveByteList,
+    MockProgressiveList, Root, SigningData, StateKey, StateKeyBytes, StateWitness,
     TransactionEnvelope, TransactionPayload, TransactionPayloadSsz, TxValue,
     MOCK_PROGRESSIVE_BYTE_LIST_LIMIT, MOCK_PROGRESSIVE_LIST_LIMIT, U256,
 };
@@ -34,6 +39,8 @@ pub use crate::validation::{
 
 #[cfg(test)]
 mod tests {
+    use alloc::boxed::Box;
+
     use super::*;
 
     // ─── Existing structural tests (must remain green) ───────────────────────
@@ -61,12 +68,53 @@ mod tests {
     }
 
     #[test]
-    fn transaction_domain_tag_remains_explicitly_unfinalized() {
-        let err = build_signing_data([0; 32], DomainSelector::TransactionAuthorization)
-            .expect_err("domain bytes should stay TODO-shaped until the spec freezes them");
+    fn transaction_domain_tag_is_frozen_to_four_bytes() {
+        let signing_data = build_signing_data([0; 32], DomainSelector::TransactionAuthorization)
+            .expect("transaction domain bytes should be available once frozen");
 
-        assert_eq!(err.domain_name, "transaction-authorization");
+        assert_eq!(signing_data.domain_type, DOMAIN_TX_SHELL);
         assert_eq!(DOMAIN_TYPE_WIDTH, 4);
+    }
+
+    #[test]
+    fn state_key_sorting_uses_shared_canonical_bytes() {
+        let account = StateKey::AccountHeader([0x11; 20]);
+        let raw = StateKey::RawTreeKey([0x22; 32]);
+
+        assert_eq!(encode_state_key(&account).as_slice()[0], 0);
+        assert_eq!(encode_state_key(&raw).as_slice()[0], 3);
+        assert!(compare_state_keys(&account, &raw).is_lt());
+        assert_eq!(
+            account.canonical_sort_key(),
+            encode_state_key(&account).into_vec()
+        );
+    }
+
+    struct StubProposerCredentialResolver;
+
+    impl ProposerCredentialResolver for StubProposerCredentialResolver {
+        fn resolve_proposer_credential(
+            &self,
+            _block_root: &Root,
+            _proposer_index_hint: Option<u64>,
+        ) -> Result<ProposerCredential, ProposerCredentialResolutionError> {
+            Ok(ProposerCredential {
+                scheme_id: 7,
+                public_key_material: alloc::vec![0xAB; 32],
+            })
+        }
+    }
+
+    #[test]
+    fn proposer_credential_resolver_trait_is_object_safe() {
+        let resolver: Box<dyn ProposerCredentialResolver> =
+            Box::new(StubProposerCredentialResolver);
+        let credential = resolver
+            .resolve_proposer_credential(&[0xCD; 32], Some(3))
+            .expect("stub resolver should produce a credential");
+
+        assert_eq!(credential.scheme_id, 7);
+        assert_eq!(credential.public_key_material.len(), 32);
     }
 
     // ─── Wire encode / decode (closed rules: tx-basic-valid, tx-create-valid, tx-unknown-tag) ──
@@ -339,7 +387,7 @@ mod tests {
     fn signing_data_hash_tree_root_is_deterministic() {
         let sd = SigningData {
             object_root: [0xAB; 32],
-            domain_type: [0x01, 0x00, 0x00, 0x00],
+            domain_type: DOMAIN_TX_SHELL,
         };
         let root1 = crate::ssz::signing_root(&sd).unwrap();
         let root2 = crate::ssz::signing_root(&sd).unwrap();
@@ -350,11 +398,11 @@ mod tests {
     fn signing_data_root_changes_when_object_root_changes() {
         let sd1 = SigningData {
             object_root: [0x00; 32],
-            domain_type: [0x01, 0x00, 0x00, 0x00],
+            domain_type: DOMAIN_TX_SHELL,
         };
         let sd2 = SigningData {
             object_root: [0x01; 32],
-            domain_type: [0x01, 0x00, 0x00, 0x00],
+            domain_type: DOMAIN_TX_SHELL,
         };
         assert_ne!(
             crate::ssz::signing_root(&sd1).unwrap(),
@@ -366,11 +414,11 @@ mod tests {
     fn signing_data_root_changes_when_domain_type_changes() {
         let sd1 = SigningData {
             object_root: [0xAB; 32],
-            domain_type: [0x01, 0x00, 0x00, 0x00],
+            domain_type: DOMAIN_TX_SHELL,
         };
         let sd2 = SigningData {
             object_root: [0xAB; 32],
-            domain_type: [0x02, 0x00, 0x00, 0x00],
+            domain_type: DOMAIN_VALIDATOR_MESSAGE,
         };
         assert_ne!(
             crate::ssz::signing_root(&sd1).unwrap(),

@@ -1,0 +1,50 @@
+{
+  "id": "witness-order-canonical-001",
+  "category": "witness",
+  "rule": "canonical_state_key_ordering",
+  "description": "A witness list that is already sorted by the shared canonical StateKey byte encoding is accepted before proof reconstruction.",
+  "input": {
+    "ordering_is_canonical": true,
+    "proof_shape_kind": "reference_empty",
+    "expected_state_root": "0x235bf652c6d3c8bfa24b4e9cfb345fa22591efdf3da21ce74b211bbd62c409ca",
+    "witnesses": [
+      {
+        "key": {
+          "kind": "account_header",
+          "address": "0x1111111111111111111111111111111111111111",
+          "canonical_key_hex": "0x000000000000000000000000001111111111111111111111111111111111111111"
+        },
+        "leaf_value_hex": "0xdeadbeef",
+        "proof_hex": []
+      },
+      {
+        "key": {
+          "kind": "storage_slot",
+          "address": "0x3333333333333333333333333333333333333333",
+          "slot": "0x4444444444444444444444444444444444444444444444444444444444444444",
+          "canonical_key_hex": "0x0100000000000000000000000033333333333333333333333333333333333333334444444444444444444444444444444444444444444444444444444444444444"
+        },
+        "leaf_value_hex": "0xaa",
+        "proof_hex": []
+      },
+      {
+        "key": {
+          "kind": "raw_tree_key",
+          "raw_key": "0x9999999999999999999999999999999999999999999999999999999999999999",
+          "canonical_key_hex": "0x039999999999999999999999999999999999999999999999999999999999999999"
+        },
+        "leaf_value_hex": "0xbb",
+        "proof_hex": []
+      }
+    ]
+  },
+  "expected_outcome": "accept",
+  "owned_by": "shell-state",
+  "state_keys": [
+    "0x000000000000000000000000001111111111111111111111111111111111111111",
+    "0x0100000000000000000000000033333333333333333333333333333333333333334444444444444444444444444444444444444444444444444444444444444444",
+    "0x039999999999999999999999999999999999999999999999999999999999999999"
+  ],
+  "proof_shape_kind": "reference_empty",
+  "notes": "This vector uses the repository-local StateKeyBytes path frozen in shell-primitives. The committed witness proof bytes stay empty because the current reference backend derives proof paths locally."
+}

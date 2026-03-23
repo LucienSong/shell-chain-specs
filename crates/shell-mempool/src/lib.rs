@@ -30,7 +30,7 @@ mod tests {
     };
     use shell_primitives::{
         Authorization, BasicFeesPerGas, BasicTransactionPayload, ExecutionAddress, GasPrice,
-        TransactionEnvelope, TransactionPayload, TransactionPayloadSsz, U256,
+        TransactionEnvelope, TransactionPayload, TransactionPayloadSsz, DOMAIN_TX_SHELL, U256,
     };
 
     use super::*;
@@ -118,7 +118,7 @@ mod tests {
             nonce_policy: NoncePolicy {
                 max_future_nonce_gap: 1,
             },
-            authorization_domain: TransactionAuthorizationDomain::Explicit([0x01, 0, 0, 0]),
+            authorization_domain: TransactionAuthorizationDomain::Canonical,
         }
     }
 
@@ -221,7 +221,7 @@ mod tests {
     }
 
     #[test]
-    fn explicit_domain_enables_signature_dispatch_after_t1_t2() {
+    fn canonical_domain_enables_signature_dispatch_after_t1_t2() {
         let dispatcher = CountingDispatcher::new();
         let pipeline = AdmissionPipeline::new(&dispatcher, sample_policy());
         let envelope = sample_envelope();
@@ -239,22 +239,22 @@ mod tests {
     }
 
     #[test]
-    fn pending_domain_fails_before_signature_dispatch() {
+    fn explicit_domain_override_is_still_supported() {
         let dispatcher = CountingDispatcher::new();
         let mut policy = sample_policy();
-        policy.authorization_domain = TransactionAuthorizationDomain::Pending;
+        policy.authorization_domain = TransactionAuthorizationDomain::Explicit(DOMAIN_TX_SHELL);
         let pipeline = AdmissionPipeline::new(&dispatcher, policy);
         let envelope = sample_envelope();
 
         let accepted = pipeline
             .screen_transaction(&envelope, None)
-            .expect("T1/T2 should still accept");
-        let error = pipeline
+            .expect("T1/T2 should still accept with an explicit domain override");
+        let authorized = pipeline
             .verify_authorizations(&envelope, &accepted, &sample_authorization_materials())
-            .expect_err("pending domain must stay explicit");
+            .expect("explicit domain bytes should still allow T3 dispatch");
 
-        assert!(matches!(error, ValidationError::SigningRootUnavailable(_)));
-        assert_eq!(dispatcher.verify_calls(), 0);
+        assert_eq!(authorized.payload_root, accepted.payload_root);
+        assert_eq!(dispatcher.verify_calls(), 1);
     }
 
     #[test]

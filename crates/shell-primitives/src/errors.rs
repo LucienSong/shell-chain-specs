@@ -51,3 +51,10 @@ pub struct SignatureSizeExceededError {
     pub max_bytes: usize,
     pub actual_bytes: usize,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProposerCredentialResolutionError {
+    NotFound,
+    ResolverUnavailable,
+    InvalidCredentialEncoding,
+}
