@@ -1,0 +1,32 @@
+{
+  "id": "block-header-witness-bytes-reject-001",
+  "category": "block",
+  "rule": "header_witness_bytes_prefilter",
+  "description": "A block header that advertises witness bytes above the local ingress ceiling is rejected before signature verification or sidecar work starts.",
+  "input": {
+    "header": {
+      "block_number": 2,
+      "timestamp": 1000001,
+      "proposer_index": 3,
+      "parent_root": "0x1111111111111111111111111111111111111111111111111111111111111111",
+      "transactions_root": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "execution_witnesses_root": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "state_root": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "receipts_root": "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "witness_bytes": 1024,
+      "proposer_signature_hex": "0x"
+    },
+    "computed_block_root": "0x6666666666666666666666666666666666666666666666666666666666666666",
+    "local_limits": {
+      "max_witness_bytes": 512
+    }
+  },
+  "expected_outcome": "reject",
+  "expected_error": {
+    "kind": "WitnessByteLimitExceeded",
+    "max_bytes": 512,
+    "actual_bytes": 1024
+  },
+  "owned_by": "shell-consensus",
+  "notes": "This fixture isolates the B0 witness-bytes prefilter. The ceiling is explicitly local policy, not a frozen consensus constant."
+}

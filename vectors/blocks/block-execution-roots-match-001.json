@@ -1,0 +1,41 @@
+{
+  "id": "block-execution-roots-match-001",
+  "category": "block",
+  "rule": "execution_root_comparison",
+  "description": "A block whose execution result matches the committed header state_root and receipts_root passes the final comparison gate.",
+  "input": {
+    "header": {
+      "block_number": 3,
+      "timestamp": 1000002,
+      "proposer_index": 4,
+      "parent_root": "0x2222222222222222222222222222222222222222222222222222222222222222",
+      "transactions_root": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "execution_witnesses_root": "0x5555555555555555555555555555555555555555555555555555555555555555",
+      "state_root": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "receipts_root": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "witness_bytes": 160,
+      "proposer_signature_hex": "0x"
+    },
+    "computed_block_root": "0x7777777777777777777777777777777777777777777777777777777777777777",
+    "body": {
+      "transaction_vector_ids": [
+        "tx-basic-valid-001"
+      ]
+    },
+    "computed_transactions_root": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sidecar": {
+      "block_root": "0x7777777777777777777777777777777777777777777777777777777777777777",
+      "witness_vector_ids": [
+        "witness-proof-valid-001"
+      ]
+    },
+    "computed_sidecar_root": "0x5555555555555555555555555555555555555555555555555555555555555555",
+    "execution_result": {
+      "post_state_root": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "receipts_root": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    }
+  },
+  "expected_outcome": "accept",
+  "owned_by": "shell-consensus",
+  "notes": "This fixture isolates the B5 root comparison contract without freezing a concrete execution engine."
+}

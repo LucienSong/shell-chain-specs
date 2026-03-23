@@ -1,0 +1,46 @@
+{
+  "id": "block-execution-roots-mismatch-001",
+  "category": "block",
+  "rule": "execution_root_comparison",
+  "description": "A block whose computed post-state root differs from the committed header state_root is rejected at the final execution comparison gate.",
+  "input": {
+    "header": {
+      "block_number": 4,
+      "timestamp": 1000003,
+      "proposer_index": 5,
+      "parent_root": "0x3333333333333333333333333333333333333333333333333333333333333333",
+      "transactions_root": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "execution_witnesses_root": "0x5555555555555555555555555555555555555555555555555555555555555555",
+      "state_root": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "receipts_root": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "witness_bytes": 160,
+      "proposer_signature_hex": "0x"
+    },
+    "computed_block_root": "0x8888888888888888888888888888888888888888888888888888888888888888",
+    "body": {
+      "transaction_vector_ids": [
+        "tx-basic-valid-001"
+      ]
+    },
+    "computed_transactions_root": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sidecar": {
+      "block_root": "0x8888888888888888888888888888888888888888888888888888888888888888",
+      "witness_vector_ids": [
+        "witness-proof-valid-001"
+      ]
+    },
+    "computed_sidecar_root": "0x5555555555555555555555555555555555555555555555555555555555555555",
+    "execution_result": {
+      "post_state_root": "0x9999999999999999999999999999999999999999999999999999999999999999",
+      "receipts_root": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    }
+  },
+  "expected_outcome": "reject",
+  "expected_error": {
+    "kind": "PostStateRootMismatch",
+    "expected_root": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "actual_root": "0x9999999999999999999999999999999999999999999999999999999999999999"
+  },
+  "owned_by": "shell-consensus",
+  "notes": "This fixture isolates the B5 post-state-root mismatch path after body and sidecar bindings have already succeeded."
+}

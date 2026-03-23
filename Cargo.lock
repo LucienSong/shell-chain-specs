@@ -254,6 +254,8 @@ dependencies = [
 name = "shell-consensus"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
  "shell-crypto",
  "shell-execution",
  "shell-mempool",

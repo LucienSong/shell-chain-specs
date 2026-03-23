@@ -13,3 +13,7 @@ shell-execution = { path = "../shell-execution" }
 shell-mempool = { path = "../shell-mempool" }
 shell-primitives = { path = "../shell-primitives" }
 shell-state = { path = "../shell-state" }
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
