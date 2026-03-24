@@ -10,6 +10,7 @@ Contributions today primarily improve repository-local understanding while exten
 - Keep documentation self-contained inside this repository.
 - Label planned components as planned; do not imply that missing crates, binaries, or Cargo workflows already exist.
 - Prefer clarifying local architecture and interfaces before proposing large implementation changes.
+- Keep the project pointed at a natively quantum-safe chain architecture rather than a temporary migration path from legacy assumptions.
 - Keep all prose, comments, identifiers, and filenames in English.
 
 ## What Good Contributions Look Like
@@ -19,6 +20,7 @@ Useful contributions at the current stage include:
 - clarifying the planned crate boundaries,
 - tightening the API and validation docs,
 - removing ambiguity from terminology,
+- strengthening the native quantum-safe direction of the design,
 - aligning docs with the local implementation specs,
 - extending the initial workspace bootstrap only when the supporting docs are updated at the same time.
 
@@ -39,6 +41,7 @@ Before opening a pull request, confirm that:
 - cheap-first validation still happens before heavier execution or consensus work,
 - SSZ/root logic stays centralized instead of being reimplemented across crates,
 - post-quantum specifics remain inside `shell-crypto`,
+- the change reinforces a post-quantum-native architecture instead of reintroducing migration-oriented legacy shortcuts,
 - peer policy and runtime concerns stay out of validation-focused crates,
 - placeholders are still labeled as provisional rather than presented as stable APIs.
 

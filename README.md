@@ -13,21 +13,23 @@ At this stage, the core implementation specs in `specs/` are all at **draft** st
 
 ## Project Direction
 
-The north star is to make `shell-chain` a docs-first Rust reference for the Shell protocol, where spec-defined behavior becomes executable, testable crate contracts.
+The north star is to make `shell-chain` a docs-first Rust reference for a natively quantum-safe smart-contract chain, where spec-defined behavior becomes executable, testable crate contracts before the ecosystem is forced through a disruptive security transition.
 
+- Build toward a chain shape that can live comfortably in a post-quantum environment from the start instead of treating quantum resistance as a late compatibility patch.
 - Build the workspace in spec order: `primitives → crypto → state → mempool → execution → consensus`.
 - Keep one canonical SSZ/object model; roots and encoding logic stay centralized instead of being redefined per crate.
 - Prefer cheap-first stateless validation and fixture-backed imports before broader runtime surface area.
 - Keep unfinished protocol areas explicit and configurable until the specs settle.
 - Do not describe the repository as a runnable node until dedicated `shell-network` and `shell-cli` layers exist.
 
-Current non-goals include a production node, the full planned crate tree, a frozen validator model, finalized witness encoding/compression, and premature backend, networking, or runtime work.
+Current non-goals include a production node, the full planned crate tree, a frozen validator model, finalized witness encoding/compression, retrofitting legacy-account assumptions back into the core design, and premature backend, networking, or runtime work.
 
 ## Anti-Drift Rules
 
 - Update docs and specs before code when behavior, boundaries, or ownership move.
 - Do not add a crate, dependency, or feature flag without a local spec citation and repository-level rationale.
 - Keep placeholders labeled as provisional; they should not silently become de facto APIs.
+- Prefer native quantum-safe assumptions in authorization, validation, and execution boundaries over migration-era compatibility shortcuts.
 - Preserve cheap-first validation, centralized SSZ/root logic, and clean crate boundaries.
 - Keep peer policy and runtime concerns out of validation-oriented crates until their dedicated layers exist.
 
