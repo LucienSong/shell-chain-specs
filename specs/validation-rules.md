@@ -46,6 +46,7 @@ To keep the first implementation pass stable, this repository treats the followi
 | Block commitment checking | `transactions_root`, `sidecar.block_root`, and `execution_witnesses_root` must all bind before stateless execution. | These checks are mandatory on the local block-import path. |
 | Sidecar byte preservation | Committed witness ordering and bytes must be preserved through commitment verification. | Any deduplicated or indexed view is downstream and local-only. |
 | Unsupported schemes | Unsupported transaction-path or validator-path schemes fail validation rather than falling back. | Scheme agility does not imply permissive decoding. |
+| Multi-authorization minimum policy | For the currently supported transaction shape, every authorization present in the envelope is required during both admission and block import. | This is the repository-local `RequireAll` rule; richer threshold or role-based semantics remain provisional. |
 
 Everything not listed as closed above should be treated as provisional if this file later describes it as configurable, pending, or subject to narrowing.
 
@@ -85,6 +86,8 @@ Peer handling must follow the local split between malformed-protocol failures an
 - **No peer penalty**: failures originating from local RPC, local builder code, or block construction tests.
 
 Implementation note: peer scoring belongs to `shell-network`; validation crates return structured reasons and let `shell-network` translate them into reputation or disconnect actions.
+
+Repository-local MVP note: altered gossip inputs and witness/proof failures must reach this boundary as typed invalid-object or policy outcomes rather than raw backend leaks. The local harness tests those paths specifically so contributor docs can describe them without implying a broader network service.
 
 ## 3. Crate Responsibilities
 
@@ -254,6 +257,7 @@ Pending protocol-closure note:
 
 Failure handling:
 - Any cryptographic failure on a required authorization rejects the transaction.
+- Altered gossip inputs that break authorization-material or commitment binding must fail closed before verifier dispatch rather than consuming optional cryptographic work.
 - P2P-originated invalid signatures are disconnect-grade.
 - Local RPC submission with an invalid signature returns a validation error only.
 
@@ -383,6 +387,7 @@ Ordering rules:
 
 Failure handling:
 - Sidecar commitment mismatch is invalid block data and disconnect-grade on P2P ingress.
+- Witness verification failures and unsupported committed proof shapes must continue downstream as typed block rejects; they must not be rewritten into silent drops or opaque backend-only failures at adapter boundaries.
 - Oversize sidecar relative to local download policy should normally stop fetch earlier at `B0`; if encountered late, treat it as a policy failure unless malformed structure is also present.
 
 ## 6.6 Stage B5: Stateless Execution and Root Comparison
@@ -506,6 +511,7 @@ The following items must remain marked as pending in code comments, config surfa
 Practical rule:
 
 - if an implementation choice would change wire bytes, change commitment inputs, reinterpret signature acceptance, or turn a configurable transport guard into a consensus-invalidating constant, it is **not** closed yet unless Section `1.1` says otherwise.
+- exercising the current `RequireAll` rule or the reference-backend witness/proof reject paths in the MVP harness does not by itself close richer authorization semantics, canonical witness encoding, witness compression, validator credential lifecycle, or any non-testnet operator/network surface.
 
 ## 10. Implementation Checklist
 

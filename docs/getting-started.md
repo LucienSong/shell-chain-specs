@@ -15,8 +15,9 @@ Prove a local end-to-end reference flow from repository-local docs, specs, fixtu
 - The repository is still docs-first and PQ-native.
 - The Rust workspace contains real crates for fixtures, primitives, crypto, state, execution, mempool, consensus, network boundaries, and the thin `shell-cli` harness.
 - `crates/shell-cli/` is a local reference harness crate, not a user-facing node.
-- Fixtures live in both `vectors/` and `crates/shell-fixtures/`.
+- Fixtures live in both `vectors/` and `crates/shell-fixtures/`, with 58 repository-local vectors currently exercising the documented contracts.
 - The current harness proves one local reference flow: admit fixture-backed transactions, verify witness/state continuity, execute planned transitions, and import a block against documented roots.
+- Harness coverage now also proves that scenario-shape mismatches fail before expensive work, missing authorization material and altered gossip payloads fail closed, the current multi-authorization rule is `RequireAll`, and witness failures remain typed rejects instead of leaking into implicit transport behavior.
 
 **Still out of scope before testnet**
 
@@ -65,7 +66,7 @@ The intended architecture is organized around explicit boundaries:
 - **`shell-network`** for propagation, fetch policy, and peer consequences
 - **`shell-cli`** for thin MVP-local fixture running, local wiring, and reference adapters only; operator-facing entry points come later
 
-All nine items above are real workspace crates today. `shell-cli` remains intentionally limited to a thin local harness rather than an operator, RPC, or runtime node surface.
+All nine items above are real workspace crates today. `shell-cli` remains intentionally limited to a thin local harness rather than an operator, RPC, transport, or runtime node surface.
 
 ## Validation Expectations
 
@@ -75,7 +76,7 @@ The current repository-local baseline commands are:
 - `cargo check --workspace`
 - `cargo test --workspace`
 
-For documentation-only changes, the minimum bar is still to keep links, terminology, and stated maturity aligned with the actual repository.
+For documentation-only changes, the minimum bar is still to keep links, terminology, stated maturity, and claimed harness coverage aligned with the actual repository.
 
 ## First Contribution Checklist
 

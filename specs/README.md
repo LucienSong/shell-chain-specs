@@ -15,6 +15,8 @@ In this phase, the specs remain the implementation source of truth for:
 
 The current goal is still not to claim a finished node. The goal is to keep the protocol coherent enough that the MVP-local harness proves the intended flow without overstating the surface.
 
+The strengthened MVP harness now covers more than the original scaffold: repository-local tests exercise fail-fast scenario integrity, fail-closed adapter handling for altered gossip inputs, the current multi-authorization `RequireAll` rule across admission and block import, and witness-failure propagation into typed reject outcomes. Those tests strengthen the local reference claim without widening the phase boundary beyond MVP.
+
 ## Phase Roadmap
 
 | Phase | What the specs must do |
@@ -35,7 +37,7 @@ They focus on implementation contracts such as:
 - future testing-vector responsibilities,
 - and the boundary that any MVP `shell-cli` remains fixture-runner/local-wiring glue instead of an operator, RPC, or production-runtime surface.
 
-When a protocol detail is still unsettled, the local specs mark it as pending rather than inventing a finalized rule. The same applies to `shell-cli`: MVP-local harness behavior can be described only as repository-local reference wiring, not as a stable external API or node contract.
+When a protocol detail is still unsettled, the local specs mark it as pending rather than inventing a finalized rule. The same applies to `shell-cli`: MVP-local harness behavior can be described only as repository-local reference wiring, not as a stable external API or node contract. Witness/proof encoding details, validator credential modeling, richer multi-authorization semantics beyond the current `RequireAll` rule, and non-testnet operator/networking surfaces must stay explicit as provisional or deferred until later phases close them.
 The four core specs below remain `draft` because MVP bootstrap work is still about proving the local path before claiming broader operational maturity.
 
 ## Shared Protocol Context

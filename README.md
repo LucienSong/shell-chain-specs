@@ -15,24 +15,25 @@ Prove the protocol end to end locally with a thin reference harness while keepin
 
 - The docs-and-scaffold foundation that locked the protocol shape, crate boundaries, validation order, and fixture plan.
 - A real Rust workspace with `shell-cli`, `shell-fixtures`, `shell-primitives`, `shell-crypto`, `shell-state`, `shell-execution`, `shell-mempool`, `shell-consensus`, and `shell-network`.
-- Shared fixtures in both `vectors/` and `crates/shell-fixtures/`.
+- 58 shared vectors in `vectors/` plus reusable fixture helpers in `crates/shell-fixtures/`.
 - Draft implementation specs in `specs/` that still define the source of truth for boundaries and validation flow.
-- A thin `shell-cli` reference harness crate that wires the local MVP flow together without claiming operator, RPC, or runtime-node status.
+- A thin `shell-cli` reference harness crate that wires the local MVP flow together without claiming operator, transport, RPC, or runtime-node status.
 
 **What the current MVP bootstrap proves**
 
-- documented fixtures can drive transaction admission through `shell-mempool`,
-- witness roots and state continuity can be checked through `shell-state`,
-- planned state transitions can execute through `shell-execution`,
-- block import can complete through `shell-consensus`,
-- and the same local reference data can feed thin `shell-network` adapters that normalize typed accept/reject outcomes without introducing a real network service.
+- documented fixtures can drive transaction admission through `shell-mempool`, witness/state continuity through `shell-state`, planned transitions through `shell-execution`, and block import through `shell-consensus`,
+- the local reference harness now fails fast on scenario-shape mismatches before signature, witness, or execution work begins,
+- missing authorization material and altered gossip payloads fail closed instead of silently degrading into partial validation,
+- the current local multi-authorization closure is `RequireAll`: every authorization present in an envelope must verify during admission and block import,
+- witness corruption and unsupported committed witness shapes propagate as typed rejects through the consensus and `shell-network` adapter boundaries,
+- and the same local reference data can feed thin `shell-network` adapters that normalize typed accept/reject outcomes without claiming a transport service, RPC surface, or running node.
 
 **Still out of scope before testnet**
 
 - Do not present the repository as a runnable node, production network, or stable operator surface.
-- Do not describe `shell-cli` as a user-facing node, RPC server, daemon, or operator workflow.
+- Do not describe `shell-cli` as a user-facing node, transport service, RPC server, daemon, or operator workflow.
 - Do not imply multi-node behavior, adversarial networking, recovery, or operational guarantees.
-- Do not freeze validator, witness-compression, or networking details that still need spec-first refinement.
+- Do not freeze validator credential, witness/proof encoding or compression, or networking details that still need spec-first refinement.
 - Do not reintroduce legacy migration assumptions that weaken the native post-quantum design.
 
 ### Phase roadmap

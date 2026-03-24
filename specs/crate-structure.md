@@ -193,9 +193,10 @@ Owns thin local reference-harness composition only:
 - fixture/scenario-driven local reference flows,
 - test-oriented helpers that admit transactions, prepare witnesses, execute plans, apply state, and import blocks,
 - thin local adapters that reuse the same reference flow for typed validation outcomes,
+- end-to-end harness checks that prove fail-fast ordering, fail-closed altered-input handling, the current multi-authorization `RequireAll` rule, and witness-failure propagation without inventing a second protocol model,
 - no operator, RPC, or daemon lifecycle surface in the MVP-local boundary.
 
-`shell-cli` is expected to be the highest-level crate and may depend on all runtime crates that it wires together.
+`shell-cli` is expected to be the highest-level crate and may depend on all runtime crates that it wires together. The harness may prove repository-local integration behavior, but it must not freeze provisional witness/proof encoding, validator credential lifecycle, or richer threshold/role-based authorization semantics before later phases close them.
 
 ## 4. Allowed Dependency Direction
 
@@ -404,6 +405,12 @@ Ownership guidance:
 - `shell-network`
   - peer consequence mapping tests,
   - fetch-policy and rate-limit tests.
+
+- `shell-cli`
+  - repository-local end-to-end harness tests that prove typed outcome preservation across crate seams,
+  - fail-closed adapter tests for altered gossip payloads and altered block inputs,
+  - multi-authorization `RequireAll` integration tests shared by admission and block import,
+  - witness-failure propagation tests from `shell-state` through `shell-consensus` into peer-facing adapter outcomes.
 
 Shared canonical fixtures should live under `vectors/` when the repository begins checking them in. Crates may mirror tiny inline fixtures inside unit tests, but reusable protocol vectors should not be duplicated across crates.
 

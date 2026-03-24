@@ -90,7 +90,7 @@ The public contract here is mostly about clean layering and error taxonomy rathe
 
 The fixture surface is expected to cover:
 
-- repository-local vectors under `vectors/`,
+- 58 repository-local vectors under `vectors/`,
 - reusable fixture helpers in `crates/shell-fixtures/`,
 - stable ownership for which crate or spec defines each invariant.
 
@@ -112,6 +112,13 @@ That harness proves a local reference flow can:
 - execute planned state transitions and compare committed roots,
 - import a block through the documented consensus path.
 
+The current integration coverage also proves the harness boundary fails and normalizes outcomes in specific MVP-critical ways:
+
+- scenario-shape mismatches fail fast before signature verification, witness work, or execution begins,
+- missing authorization material and altered gossip payloads fail closed at the local adapter boundary,
+- the current local multi-authorization contract is `RequireAll`, so every authorization present in a transaction envelope must verify successfully,
+- witness corruption and unsupported committed witness shapes propagate as typed reject/disconnect outcomes through the consensus and `shell-network` adapter layers.
+
 For MVP-local work, `shell-cli` stays explicitly out of scope for:
 
 - operator lifecycle management,
@@ -120,7 +127,7 @@ For MVP-local work, `shell-cli` stays explicitly out of scope for:
 - multi-node networking,
 - stable external automation contracts.
 
-Those operator-facing entry points are planned for later phases. The current `shell-cli` crate is intentionally limited to harness-local reference wiring rather than a real operator or RPC surface.
+Those operator-facing entry points are planned for later phases. The current `shell-cli` crate is intentionally limited to harness-local reference wiring rather than a real operator, transport, or RPC surface.
 
 ## Intentionally Absent Today
 
@@ -129,7 +136,7 @@ The repository does not yet provide:
 - generated `cargo doc` output checked into the repository,
 - versioned Rust APIs,
 - runnable node binaries,
-- real operator or RPC interfaces,
+- real operator, transport, or RPC interfaces,
 - a stable `shell-cli` surface beyond the thin MVP-local harness boundary.
 
 ## When This Document Should Change

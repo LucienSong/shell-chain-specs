@@ -23,6 +23,19 @@ Before making a change, keep these constraints in mind:
 - Do not move the project toward a migration retrofit; keep the design native to post-quantum assumptions from genesis.
 - Do not freeze unsettled validator, witness, or networking details just to make the docs sound more complete.
 
+## Provisional vs. Closed MVP Behavior
+
+In MVP work, keep three maturity buckets distinct across docs, specs, fixtures, and code review:
+
+- **Closed local MVP behavior**
+  - cheap-first validation order, fail-closed commitment checks, the current multi-authorization `RequireAll` rule across admission/import, and witness-failure propagation as typed rejects in the reference harness are all real repository-local contracts and may be described as such.
+- **Provisional but already exercised locally**
+  - witness compression, canonical witness byte encoding, detailed proof-node layout, validator credential lifecycle, validator-path transport ceilings, and richer threshold or role-based multi-authorization semantics may be tested in the current harness without being presented as final protocol closure.
+- **Deferred beyond MVP**
+  - multi-node behavior, adversarial networking, recovery guarantees, and any operator/RPC/daemon surface remain outside the repository's claims until later phases, even if a local test touches adjacent plumbing.
+
+When you tighten docs, say both what the current harness proves and what still remains provisional or deferred.
+
 ## Workflow
 
 1. Create a branch for your change.
@@ -42,6 +55,7 @@ Before opening a pull request, confirm that:
 - post-quantum specifics remain behind clean crypto boundaries,
 - fixtures in `vectors/` and `crates/shell-fixtures/` still have clear ownership,
 - placeholders are still labeled as provisional rather than presented as stable APIs,
+- stronger harness claims are backed by concrete workspace tests or shared vectors instead of implied maturity,
 - any harness description says exactly which local flow is proven and avoids implying more,
 - any `shell-cli` wording stays limited to fixture-runner, local-wiring, and reference-adapter duties until later phases introduce real operator surfaces.
 

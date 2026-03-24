@@ -34,7 +34,7 @@ Until a full fixture corpus is checked in, this repository should treat the foll
 - User-path authorization signatures above 8 KB are rejected by default as a local stress-control rule.
 - Witness ordering checks run against one canonical `StateKey` comparator before proof reconstruction.
 - `header.witness_bytes` and validator-path signature-size controls are configurable ingress guards, not frozen consensus constants.
-- Witness compression, canonical witness encoding, richer threshold or role-based multi-authorization semantics, and parts of the detailed proof-node layout remain provisional and must be tested as provisional behavior. The current local baseline still requires every authorization present in a transaction envelope to verify successfully.
+- Witness compression, canonical witness encoding, richer threshold or role-based multi-authorization semantics, and parts of the detailed proof-node layout remain provisional and must be tested as provisional behavior. The current local baseline still requires every authorization present in a transaction envelope to verify successfully, and the MVP harness must preserve witness/proof failures as typed rejects without presenting the current reference-backend encoding details as frozen protocol law.
 
 ## 3. Fixture Placement and Naming
 
@@ -213,6 +213,17 @@ Typical pass/fail examples:
 - malformed proof data fails as a state-proof validation error,
 - block sidecar bytes are preserved through commitment checks before any derived indexing.
 
+### 6.3.1 Witness Maturity Boundary
+
+`witness-order-*` and `witness-proof-*` vectors should keep the maturity split explicit:
+
+- **closed local behavior**
+  - canonical `StateKey` ordering, exact commitment binding, and fail-closed rejection before execution remain part of the MVP contract,
+- **provisional but exercised locally**
+  - reference-backend proof-shape details, witness compression choices, and canonical witness byte encoding may change in later phases even when current vectors and harness tests reject malformed inputs deterministically.
+
+The current MVP harness already exercises witness leaf corruption and unsupported proof-shape failures as repository-local reject paths. Those tests validate failure propagation, not final witness/proof closure.
+
 ### 6.4 `shell-execution`
 
 Owns vectors for:
@@ -256,6 +267,17 @@ Owns vectors for:
 - non-penalizing treatment of purely local-policy failures.
 
 These are operational vectors rather than consensus vectors, but they still need a stable local contract.
+
+### 6.8 `shell-cli`
+
+Owns repository-local end-to-end harness coverage for:
+
+- fail-closed adapter handling when altered gossip payloads or altered block inputs break commitment or authorization-material binding,
+- preservation of the current multi-authorization `RequireAll` rule across both transaction admission and block import,
+- witness-failure propagation from `shell-state` / `shell-consensus` into typed `ValidationOutcome::Reject` and peer-action mappings,
+- reference-flow checks that reuse shared vectors and fixtures without inventing a separate protocol model for the harness.
+
+These tests do not create new consensus rules or imply testnet readiness. They prove that the MVP harness preserves lower-layer contracts and error surfaces across crate seams.
 
 ## 7. Required Vector Matrix
 
@@ -404,6 +426,8 @@ In practice, provisional vectors should focus on:
 - configurability boundaries,
 - preservation of committed bytes before any local normalization,
 - explicit documentation of what remains open.
+
+Current MVP coverage already uses that rule for witness/proof behavior and multi-authorization policy: the repository tests deterministic fail-fast and fail-closed outcomes, but still treats witness/proof encoding details, validator credential modeling, validator-path transport ceilings, and richer authorization semantics as provisional or deferred.
 
 ## 10. Acceptance Criteria for the First Real Corpus
 
