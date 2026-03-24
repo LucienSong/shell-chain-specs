@@ -49,11 +49,24 @@ impl TransactionAuthorizationDomain {
     }
 }
 
+/// Local acceptance policy for `TransactionEnvelope.authorizations`.
+///
+/// The minimum supported contract is closed locally: every authorization
+/// present in the envelope is currently required, so transaction admission
+/// rejects the envelope if any authorization fails verification. Future
+/// threshold or role-based semantics must be added explicitly as new variants.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MultiAuthorizationPolicy {
+    #[default]
+    RequireAll,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct AdmissionPolicy {
     pub fee_schedule: FeeSchedule,
     pub nonce_policy: NoncePolicy,
     pub authorization_domain: TransactionAuthorizationDomain,
+    pub multi_authorization_policy: MultiAuthorizationPolicy,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -105,6 +118,11 @@ where
         })
     }
 
+    /// Verifies transaction authorizations under the configured local
+    /// multi-authorization policy.
+    ///
+    /// The minimum supported policy is `RequireAll`: every authorization
+    /// present in the envelope is treated as required during T3 admission.
     pub fn verify_authorizations(
         &self,
         envelope: &TransactionEnvelope,
@@ -126,19 +144,23 @@ where
             .signing_root(accepted.payload_root)
             .map_err(ValidationError::SigningRootUnavailable)?;
 
-        for (authorization, material) in envelope
-            .authorizations
-            .iter()
-            .zip(authorization_materials.iter())
-        {
-            let request = SignatureVerificationRequest {
-                public_key_material: material.public_key_material,
-                signing_root,
-                signature: &authorization.signature,
-            };
-            self.dispatcher
-                .verify_transaction_authorization(authorization.scheme_id, &request)
-                .map_err(map_crypto_error)?;
+        match self.policy.multi_authorization_policy {
+            MultiAuthorizationPolicy::RequireAll => {
+                for (authorization, material) in envelope
+                    .authorizations
+                    .iter()
+                    .zip(authorization_materials.iter())
+                {
+                    let request = SignatureVerificationRequest {
+                        public_key_material: material.public_key_material,
+                        signing_root,
+                        signature: &authorization.signature,
+                    };
+                    self.dispatcher
+                        .verify_transaction_authorization(authorization.scheme_id, &request)
+                        .map_err(map_crypto_error)?;
+                }
+            }
         }
 
         Ok(AuthorizationValidated {

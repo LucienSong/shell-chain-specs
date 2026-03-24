@@ -1,0 +1,22 @@
+{
+  "id": "peer-invalid-signature-001",
+  "category": "peer-action",
+  "rule": "disconnect_on_invalid_signature",
+  "description": "A consensus-stage invalid signature from a remote peer maps to disconnect.",
+  "input": {
+    "origin": "fetch",
+    "source": "consensus_error",
+    "error": {
+      "kind": "crypto_verification_failed",
+      "scheme_id": 7,
+      "context": "shared peer-action vector invalidated proposer signature"
+    }
+  },
+  "expected_outcome": "reject",
+  "expected_action": {
+    "action": "disconnect",
+    "hint": "invalid_signature"
+  },
+  "owned_by": "shell-network",
+  "notes": "The network layer consumes the structured ConsensusError::Crypto surface rather than re-running signature logic."
+}

@@ -4,7 +4,7 @@
   "rule": "reference_proof_reconstruction",
   "description": "A reference-backend witness that carries unexpected committed proof bytes is rejected as an unsupported proof shape.",
   "input": {
-    "proof_shape_kind": "unexpected_committed_bytes",
+    "proof_shape_kind": "placeholder_committed_nodes",
     "materialized_state": [
       {
         "key": {
@@ -37,6 +37,6 @@
   "state_keys": [
     "0x000000000000000000000000001111111111111111111111111111111111111111"
   ],
-  "proof_shape_kind": "unexpected_committed_bytes",
-  "notes": "This vector stays honest about current repository behavior: detailed witness proof-node layout is still provisional, so the reference backend rejects any non-empty committed proof payload instead of pretending to decode a finalized wire proof."
+  "proof_shape_kind": "placeholder_committed_nodes",
+  "notes": "This vector stays honest about current repository behavior: detailed witness proof-node layout is still provisional, so the reference backend rejects any non-empty committed proof payload instead of pretending to decode a finalized wire proof. The shared fixture shape now labels that committed form as placeholder_committed_nodes rather than implying a finalized proof codec."
 }

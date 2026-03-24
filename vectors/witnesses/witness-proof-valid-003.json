@@ -1,0 +1,47 @@
+{
+  "id": "witness-proof-valid-003",
+  "category": "witness",
+  "rule": "reference_proof_reconstruction",
+  "description": "A reference-backend witness for the second key in the shared two-leaf pre-state verifies against the same expected state root used by end-to-end root-check vectors.",
+  "input": {
+    "proof_shape_kind": "reference_empty",
+    "materialized_state": [
+      {
+        "key": {
+          "kind": "account_header",
+          "address": "0x1111111111111111111111111111111111111111",
+          "canonical_key_hex": "0x000000000000000000000000001111111111111111111111111111111111111111"
+        },
+        "leaf_value_hex": "0xdeadbeef"
+      },
+      {
+        "key": {
+          "kind": "storage_slot",
+          "address": "0x1111111111111111111111111111111111111111",
+          "slot": "0x0101010101010101010101010101010101010101010101010101010101010101",
+          "canonical_key_hex": "0x0100000000000000000000000011111111111111111111111111111111111111110101010101010101010101010101010101010101010101010101010101010101"
+        },
+        "leaf_value_hex": "0xcafe"
+      }
+    ],
+    "expected_state_root": "0x54cf5a159f1646c7fc12fa79eeeee9cdf70d1cca45a3a2c73665f631df541a04",
+    "witness": {
+      "key": {
+        "kind": "storage_slot",
+        "address": "0x1111111111111111111111111111111111111111",
+        "slot": "0x0101010101010101010101010101010101010101010101010101010101010101",
+        "canonical_key_hex": "0x0100000000000000000000000011111111111111111111111111111111111111110101010101010101010101010101010101010101010101010101010101010101"
+      },
+      "leaf_value_hex": "0xcafe",
+      "proof_hex": []
+    }
+  },
+  "expected_outcome": "accept",
+  "owned_by": "shell-state",
+  "state_keys": [
+    "0x000000000000000000000000001111111111111111111111111111111111111111",
+    "0x0100000000000000000000000011111111111111111111111111111111111111110101010101010101010101010101010101010101010101010101010101010101"
+  ],
+  "proof_shape_kind": "reference_empty",
+  "notes": "The paired multi-leaf witness vectors let execution and consensus tests share one real reference pre-state without inventing a block-local witness codec."
+}

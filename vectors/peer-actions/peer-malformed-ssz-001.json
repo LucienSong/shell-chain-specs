@@ -1,0 +1,22 @@
+{
+  "id": "peer-malformed-ssz-001",
+  "category": "peer-action",
+  "rule": "disconnect_on_malformed_announcement",
+  "description": "A malformed transaction announcement at the T0 decode stage maps to disconnect for a remote peer.",
+  "input": {
+    "origin": "gossip",
+    "source": "mempool_error",
+    "stage": "t0",
+    "error": {
+      "kind": "malformed_ssz",
+      "context": "truncated tx announcement"
+    }
+  },
+  "expected_outcome": "reject",
+  "expected_action": {
+    "action": "disconnect",
+    "hint": "malformed_announcement"
+  },
+  "owned_by": "shell-network",
+  "notes": "The vector consumes the existing PrimitiveError::MalformedSsz surface emitted by lower layers."
+}

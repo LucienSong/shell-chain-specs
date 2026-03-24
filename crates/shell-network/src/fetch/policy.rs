@@ -25,47 +25,11 @@ impl SidecarFetchPolicy {
 
 #[cfg(test)]
 mod tests {
-    use shell_consensus::ConsensusHeader;
-    use shell_primitives::{PrimitiveError, ProtocolObject, Root};
+    use alloc::vec::Vec;
+
+    use shell_consensus::CanonicalBlockHeader;
 
     use super::*;
-
-    struct StubHeader {
-        witness_bytes: u64,
-        block_root: Root,
-    }
-
-    impl ProtocolObject for StubHeader {
-        fn canonical_root(&self) -> Result<Root, PrimitiveError> {
-            Ok(self.block_root)
-        }
-    }
-
-    impl ConsensusHeader for StubHeader {
-        fn witness_bytes(&self) -> u64 {
-            self.witness_bytes
-        }
-
-        fn transactions_root(&self) -> Root {
-            [0; 32]
-        }
-
-        fn execution_witnesses_root(&self) -> Root {
-            [0; 32]
-        }
-
-        fn state_root(&self) -> Root {
-            [0; 32]
-        }
-
-        fn receipts_root(&self) -> Root {
-            [0; 32]
-        }
-
-        fn proposer_signature(&self) -> &[u8] {
-            &[]
-        }
-    }
 
     #[test]
     fn oversized_witness_headers_skip_sidecar_fetch() {
@@ -73,9 +37,18 @@ mod tests {
             max_witness_bytes: Some(512),
             require_explicit_request: false,
         };
-        let header = StubHeader {
+        let header = CanonicalBlockHeader {
+            block_number: 1,
+            timestamp: 1,
+            parent_root: [0; 32],
             witness_bytes: 1_024,
             block_root: [7; 32],
+            transactions_root: [0; 32],
+            execution_witnesses_root: [0; 32],
+            state_root: [0; 32],
+            receipts_root: [0; 32],
+            proposer_signature: Vec::new(),
+            proposer_index_hint: None,
         };
 
         assert_eq!(policy.decide_for_header(&header, true), FetchDecision::Skip);
@@ -87,9 +60,18 @@ mod tests {
             max_witness_bytes: Some(2_048),
             require_explicit_request: true,
         };
-        let header = StubHeader {
+        let header = CanonicalBlockHeader {
+            block_number: 1,
+            timestamp: 1,
+            parent_root: [0; 32],
             witness_bytes: 256,
             block_root: [9; 32],
+            transactions_root: [0; 32],
+            execution_witnesses_root: [0; 32],
+            state_root: [0; 32],
+            receipts_root: [0; 32],
+            proposer_signature: Vec::new(),
+            proposer_index_hint: None,
         };
 
         assert_eq!(

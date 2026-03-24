@@ -22,11 +22,16 @@ pub struct ProposerCredential {
     pub public_key_material: MockProgressiveByteList,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProposerCredentialQuery {
+    pub block_root: Root,
+    pub proposer_index_hint: Option<u64>,
+}
+
 pub trait ProposerCredentialResolver {
     fn resolve_proposer_credential(
         &self,
-        block_root: &Root,
-        proposer_index_hint: Option<u64>,
+        query: ProposerCredentialQuery,
     ) -> Result<ProposerCredential, ProposerCredentialResolutionError>;
 }
 

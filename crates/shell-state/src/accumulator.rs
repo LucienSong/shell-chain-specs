@@ -8,7 +8,7 @@ use shell_primitives::{MockProgressiveByteList, Root, StateKey, StateWitness};
 use crate::errors::{StateError, WitnessOrderingError};
 use crate::keys::{compare_state_keys, encode_state_key, StateKeyBytes};
 use crate::transition::StatePatch;
-use crate::witness::WitnessVerifier;
+use crate::witness::{ensure_reference_backend_proof_shape, WitnessVerifier};
 
 pub trait StateAccumulator {
     fn get_witness_for_accesses(
@@ -109,11 +109,7 @@ impl InMemoryAccumulator {
         &self,
         witness: &StateWitness,
     ) -> Result<ReferenceProofPath, StateError> {
-        if !witness.proof.is_empty() {
-            return Err(StateError::UnsupportedProofShape(
-                "reference backend derives proof paths locally and does not interpret committed proof bytes",
-            ));
-        }
+        ensure_reference_backend_proof_shape(witness)?;
 
         let proof_path = self.proof_path_for_access(&witness.key)?;
         proof_path.verify_witness(witness, &self.root)?;

@@ -53,8 +53,20 @@ pub struct SignatureSizeExceededError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InvalidCredentialEncodingError {
+    pub scheme_id: u8,
+    pub context: &'static str,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProposerCredentialResolutionError {
     NotFound,
     ResolverUnavailable,
-    InvalidCredentialEncoding,
+    InvalidCredentialEncoding(InvalidCredentialEncodingError),
+}
+
+impl ProposerCredentialResolutionError {
+    pub const fn is_consensus_invalid(self) -> bool {
+        matches!(self, Self::NotFound | Self::InvalidCredentialEncoding(_))
+    }
 }

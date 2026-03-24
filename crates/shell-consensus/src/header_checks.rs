@@ -1,6 +1,7 @@
 use shell_crypto::{SignatureDispatcher, SignatureVerificationRequest};
 use shell_primitives::{
-    build_signing_data, ssz, DomainSelector, ProposerCredentialResolver, ProtocolObject, Root,
+    build_signing_data, ssz, DomainSelector, ProposerCredentialQuery, ProposerCredentialResolver,
+    ProtocolObject, Root,
 };
 
 use crate::outcomes::{ConsensusError, WitnessByteLimitExceededError};
@@ -55,8 +56,10 @@ pub fn verify_header_signature(
     resolver: &dyn ProposerCredentialResolver,
     dispatcher: &dyn SignatureDispatcher,
 ) -> Result<(), ConsensusError> {
-    let credential =
-        resolver.resolve_proposer_credential(block_root, header.proposer_index_hint())?;
+    let credential = resolver.resolve_proposer_credential(ProposerCredentialQuery {
+        block_root: *block_root,
+        proposer_index_hint: header.proposer_index_hint(),
+    })?;
     let signing_data = build_signing_data(*block_root, DomainSelector::ValidatorMessage)?;
     let signing_root = ssz::signing_root(&signing_data)?;
     let request = SignatureVerificationRequest {

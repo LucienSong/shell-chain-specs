@@ -26,7 +26,7 @@ The implementation in this repository should treat the following assumptions as 
 - User-path authorization signatures above 8 KB are rejected by default as a local stress-control rule. Scheme-local limits may be stricter, but not looser, on that path.
 - `header.witness_bytes` must be checked before sidecar fetch or deep parsing, but its final protocol ceiling is still open, so implementations must expose a configurable ingress guard rather than a frozen consensus number.
 - Block witness sidecars must be validated exactly as committed. Committed ordering and bytes are preserved through the commitment-check phase, even if later execution builds a deduplicated or indexed in-memory view.
-- Witness compression, canonical witness encoding, validator credential modeling, validator-path size tolerance, supported signature-family narrowing, multi-authorization semantics, and scheme-specific gas coefficients remain pending-closure items.
+- Witness compression, canonical witness encoding, validator credential modeling, validator-path size tolerance, supported signature-family narrowing, richer threshold or role-based multi-authorization semantics, and scheme-specific gas coefficients remain pending-closure items.
 
 This file is intentionally implementation-focused:
 - these assumptions define the protocol objects and validation gates that `shell-chain` currently builds against,
@@ -59,9 +59,10 @@ The same invalid object may arrive from P2P, RPC, local tests, or block producti
 - `MalformedSszError(Context)`: SSZ decoding or structural decoding failed.
 - `UnsupportedPayloadVariant(Tag)`: `TransactionPayload` discriminant is unknown.
 - `UnsupportedSchemeError(SchemeId)`: `Authorization.scheme_id` or validator credential scheme is not supported by the local dispatcher.
+- `InvalidCredentialEncodingError(SchemeId, Context)`: proposer-credential bytes reached the resolver boundary but do not decode into the scheme selected for validator-path verification.
 - `AuthorizationCountError(ExpectedPolicy, Actual)`: authorization list violates the currently supported policy.
 - `PayloadRootMismatchError(ExpectedRoot, ActualRoot)`: `Authorization.payload_root` does not match `hash_tree_root(TransactionPayload)`.
-- `SignatureSizeExceededError(MaxSize, ActualSize)`: signature artifact exceeds the locally enforced bound for the selected scheme or path.
+- `SignatureSizeExceededError(MaxSize, ActualSize, Path, Kind)`: signature artifact exceeds the locally enforced bound for the selected path, where `Kind` distinguishes repository-closed rules, scheme-native ceilings, and validator-path transport guards.
 - `WitnessSizeExceededError(MaxSize, ActualSize)`: witness artifact volume exceeded the applicable ingress bound.
 - `TransactionsRootMismatchError(ExpectedRoot, ActualRoot)`: block body does not match `header.transactions_root`.
 - `SidecarMismatchError(ExpectedRoot, ActualRoot)`: sidecar commitment validation failed.
@@ -111,6 +112,7 @@ The dispatcher is responsible for:
 - mapping `scheme_id` or validator credential type to a concrete verifier,
 - checking scheme-local artifact constraints before expensive verification begins,
 - constructing a uniform `VerificationError` surface for callers,
+- preserving whether a size failure came from a closed repository rule, a validator-path local transport guard, or a verifier-native ceiling,
 - exposing a stable trait so `shell-mempool` and `shell-consensus` do not depend on individual PQ libraries.
 
 Recommended trait shape:
@@ -162,9 +164,10 @@ Implementation responsibilities are:
 Repository-local closure for this stage:
 
 - B1 consumes proposer credentials through a shared resolver boundary in `shell-primitives`:
-  `resolve_proposer_credential(block_root, proposer_index_hint) -> (scheme_id, public_key_material)`.
+  `resolve_proposer_credential(ProposerCredentialQuery { block_root, proposer_index_hint }) -> (scheme_id, public_key_material)`.
 - The repository currently treats validator-path verification as **single-proposer / single-signature** for one block header at a time.
 - `scheme_id` and `public_key_material` are sufficient to dispatch verification through `shell-crypto`; the underlying credential lifecycle remains intentionally unresolved.
+- Validator-path size failures must remain split: configurable dispatcher guards are local transport policy (`SignatureLimitKind::LocalTransportGuard`), while verifier-native ceilings and cryptographic failures remain consensus-invalidating.
 
 Open items that must remain explicit in code and docs:
 - The exact validator credential object model is still pending closure around validator credential separation.
@@ -198,6 +201,7 @@ Required ordering inside this stage:
 2. Verify the payload discriminant is one of the supported upstream variants.
 3. Verify `authorizations` satisfies the currently supported policy.
    - Default implementation path: require `authorizations.len() >= 1`.
+   - Current local minimum semantics: every authorization present in the envelope remains part of the required set; none are optional unless a later transaction shape says so explicitly.
    - If a future external-account-abstraction path allows empty authorization lists, gate it behind an explicit feature or transaction subtype once the protocol shape is locally adopted here.
 4. Verify every `Authorization.payload_root` matches the recomputed `payload_root`.
 5. Apply signature-size prefilters before cryptographic verification.
@@ -241,12 +245,12 @@ Checks:
 3. Apply the transaction-path acceptance policy for multiple authorizations.
 
 Acceptance policy guidance:
-- The verifier must return per-authorization results.
 - The mempool admission policy must not treat a transaction as valid until the required authorization condition for the locally supported transaction shape is satisfied.
+- Minimum local closure: for the currently supported transaction shape, every authorization present in the envelope is required, and all of them must verify successfully.
 - If the protocol later defines threshold or role-based multi-authorization semantics, that policy belongs in `shell-mempool`; `shell-crypto` remains a pure verifier.
 
 Pending protocol-closure note:
-- The `authorizations` container is part of the current transaction shape, but richer multi-authorization semantics are not yet closed here. Until that closes, the default implementation should require that all currently interpreted required authorizations verify successfully, and document any narrower assumption explicitly in code.
+- The `authorizations` container is part of the current transaction shape, but richer threshold or role-based semantics are not yet closed here. Until that closes, implementations must keep the current `require-all-present-authorizations` rule explicit in code and configuration surfaces shared by transaction admission and block import.
 
 Failure handling:
 - Any cryptographic failure on a required authorization rejects the transaction.
@@ -353,6 +357,7 @@ Rules:
 - A block importer must not assume mempool presence.
 - Transactions included in a block still require stateless structural and signature validity even if a local pool previously accepted them.
 - Optional mempool-only admission policies should not be allowed to make a consensus-valid block fail.
+- The current required-authorization contract is consensus-critical: block import must reapply the same explicit multi-authorization policy used by transaction admission, which presently means every authorization present in the envelope must verify successfully.
 
 Implementation split:
 - `shell-mempool` may provide reusable validators.
@@ -486,8 +491,9 @@ The following items must remain marked as pending in code comments, config surfa
    - Implementation action: keep `shell-crypto` dispatcher scheme-agile and avoid leaking family-specific assumptions into mempool or consensus code.
 
 5. **Multi-authorization semantics**
-   - The container is defined, but richer threshold or role semantics are not closed here.
-   - Implementation action: keep acceptance policy explicit and isolated from cryptographic verification.
+   - The minimum local rule is closed: for the currently supported transaction shape, every authorization present in the envelope is required and must verify for admission and block import.
+   - Richer threshold or role semantics are not closed here.
+   - Implementation action: keep the current require-all policy explicit and isolated from cryptographic verification so future variants can extend it without changing the default silently.
 
 6. **Witness compression and canonical encoding rules**
    - This remains open in the current local assumptions.

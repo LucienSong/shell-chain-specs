@@ -1,4 +1,4 @@
-use shell_mempool::ValidationError;
+use shell_mempool::{MultiAuthorizationPolicy, ValidationError};
 use shell_primitives::{PrimitiveError, Root, TransactionEnvelope};
 
 use crate::execution_bridge::{execute_and_compare, BlockExecutionEngine};
@@ -14,7 +14,11 @@ pub trait ConsensusBody {
 }
 
 pub trait TransactionRevalidator {
-    fn revalidate(&self, transaction: &TransactionEnvelope) -> Result<(), ValidationError>;
+    fn revalidate(
+        &self,
+        transaction: &TransactionEnvelope,
+        multi_authorization_policy: MultiAuthorizationPolicy,
+    ) -> Result<(), ValidationError>;
 }
 
 #[derive(Clone, Copy)]
@@ -29,6 +33,7 @@ pub struct BlockImportServices<'a> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct BlockImportConfig {
     pub header_prefilter: HeaderPrefilterConfig,
+    pub multi_authorization_policy: MultiAuthorizationPolicy,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -60,7 +65,11 @@ impl BlockImportPipeline {
             services.resolver,
             services.dispatcher,
         )?;
-        revalidate_body_transactions(body, services.revalidator)?;
+        revalidate_body_transactions(
+            body,
+            services.revalidator,
+            self.config.multi_authorization_policy,
+        )?;
         verify_sidecar_binding(
             header,
             &header_outcome.block_root,
@@ -97,9 +106,10 @@ pub fn verify_body_binding(
 pub fn revalidate_body_transactions(
     body: &dyn ConsensusBody,
     revalidator: &dyn TransactionRevalidator,
+    multi_authorization_policy: MultiAuthorizationPolicy,
 ) -> Result<(), ConsensusError> {
     for transaction in body.transactions() {
-        revalidator.revalidate(transaction)?;
+        revalidator.revalidate(transaction, multi_authorization_policy)?;
     }
 
     Ok(())

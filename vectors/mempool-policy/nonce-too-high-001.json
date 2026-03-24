@@ -1,0 +1,44 @@
+{
+  "id": "nonce-too-high-001",
+  "category": "mempool-policy",
+  "rule": "nonce_future_gap",
+  "description": "A transaction whose nonce exceeds the configured future gap is soft-rejected before transaction-path signature verification runs.",
+  "input": {
+    "payload": {
+      "nonce": 5,
+      "gas_limit": 21000,
+      "regular_fee": 5,
+      "max_priority_fee_per_gas": 1,
+      "max_witness_priority_fee": 7,
+      "to": "0x1111111111111111111111111111111111111111"
+    },
+    "authorizations": [
+      {
+        "scheme_id": 0,
+        "signature_hex": "0xabababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab",
+        "payload_root_mode": "canonical"
+      }
+    ],
+    "authorization_materials": [
+      {
+        "public_key_hex": "0x7777777777777777777777777777777777777777777777777777777777777777"
+      }
+    ],
+    "policy": {
+      "payload_lane_base_fee": 2,
+      "witness_lane_base_fee": 3,
+      "max_future_nonce_gap": 1
+    },
+    "observed_nonce": 2
+  },
+  "expected_outcome": "policy_reject",
+  "expected_error": {
+    "kind": "NoncePolicy",
+    "context": "transaction nonce exceeds the configured future replay lane gap"
+  },
+  "expected_effects": {
+    "transaction_signature_verifications": 0
+  },
+  "owned_by": "shell-mempool",
+  "notes": "Future-gap policy should short-circuit before the node spends work on cryptographic verification."
+}

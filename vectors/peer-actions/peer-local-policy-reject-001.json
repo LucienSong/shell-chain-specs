@@ -1,0 +1,18 @@
+{
+  "id": "peer-local-policy-reject-001",
+  "category": "peer-action",
+  "rule": "avoid_local_penalties",
+  "description": "A local policy rejection stays non-penalizing even though it preserves the policy_reject classification.",
+  "input": {
+    "origin": "local_rpc",
+    "source": "validation_outcome",
+    "outcome": "policy_reject"
+  },
+  "expected_outcome": "policy_reject",
+  "expected_action": {
+    "action": "ignore",
+    "hint": "policy_rejected"
+  },
+  "owned_by": "shell-network",
+  "notes": "Local origins should not accrue reputation changes for lower-layer policy failures."
+}

@@ -9,5 +9,9 @@ workspace = true
 
 [dependencies]
 shell-consensus = { path = "../shell-consensus" }
+shell-crypto = { path = "../shell-crypto" }
 shell-mempool = { path = "../shell-mempool" }
 shell-primitives = { path = "../shell-primitives" }
+
+[dev-dependencies]
+shell-fixtures = { path = "../shell-fixtures" }

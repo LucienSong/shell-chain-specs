@@ -46,6 +46,31 @@ pub struct StateWitness {
     pub proof: MockProgressiveList<Bytes32>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WitnessProofShape {
+    ReferenceEmpty,
+    PlaceholderCommittedNodes,
+}
+
+impl WitnessProofShape {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ReferenceEmpty => "reference_empty",
+            Self::PlaceholderCommittedNodes => "placeholder_committed_nodes",
+        }
+    }
+}
+
+impl StateWitness {
+    pub fn proof_shape(&self) -> WitnessProofShape {
+        if self.proof.is_empty() {
+            WitnessProofShape::ReferenceEmpty
+        } else {
+            WitnessProofShape::PlaceholderCommittedNodes
+        }
+    }
+}
+
 pub fn canonicalize_execution_address(addr: &ExecutionAddress) -> Bytes32 {
     let mut key = [0; 32];
     key[12..].copy_from_slice(addr);

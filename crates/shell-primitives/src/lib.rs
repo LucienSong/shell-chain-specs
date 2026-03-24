@@ -16,20 +16,20 @@ pub use crate::domains::{
     DOMAIN_VALIDATOR_MESSAGE,
 };
 pub use crate::errors::{
-    AuthorizationCountError, DomainError, MalformedSszError, PayloadRootMismatchError,
-    PrimitiveError, ProposerCredentialResolutionError, SignatureSizeExceededError,
-    SigningRootConstructionError, UnsupportedPayloadVariant,
+    AuthorizationCountError, DomainError, InvalidCredentialEncodingError, MalformedSszError,
+    PayloadRootMismatchError, PrimitiveError, ProposerCredentialResolutionError,
+    SignatureSizeExceededError, SigningRootConstructionError, UnsupportedPayloadVariant,
 };
 pub use crate::traits::{
-    ProposerCredential, ProposerCredentialResolver, ProtocolObject, StateMetadata,
-    TransactionMetadata, ValidationOutcome, ValidationStage,
+    ProposerCredential, ProposerCredentialQuery, ProposerCredentialResolver, ProtocolObject,
+    StateMetadata, TransactionMetadata, ValidationOutcome, ValidationStage,
 };
 pub use crate::types::{
     canonicalize_execution_address, compare_state_keys, encode_state_key, Authorization,
     BasicFeesPerGas, BasicTransactionPayload, Bytes31, Bytes32, Bytes4, ChainId,
     CreateTransactionPayload, ExecutionAddress, GasPrice, MockProgressiveByteList,
     MockProgressiveList, Root, SigningData, StateKey, StateKeyBytes, StateWitness,
-    TransactionEnvelope, TransactionPayload, TransactionPayloadSsz, TxValue,
+    TransactionEnvelope, TransactionPayload, TransactionPayloadSsz, TxValue, WitnessProofShape,
     MOCK_PROGRESSIVE_BYTE_LIST_LIMIT, MOCK_PROGRESSIVE_LIST_LIMIT, U256,
 };
 pub use crate::validation::{
@@ -95,8 +95,7 @@ mod tests {
     impl ProposerCredentialResolver for StubProposerCredentialResolver {
         fn resolve_proposer_credential(
             &self,
-            _block_root: &Root,
-            _proposer_index_hint: Option<u64>,
+            _query: ProposerCredentialQuery,
         ) -> Result<ProposerCredential, ProposerCredentialResolutionError> {
             Ok(ProposerCredential {
                 scheme_id: 7,
@@ -110,7 +109,10 @@ mod tests {
         let resolver: Box<dyn ProposerCredentialResolver> =
             Box::new(StubProposerCredentialResolver);
         let credential = resolver
-            .resolve_proposer_credential(&[0xCD; 32], Some(3))
+            .resolve_proposer_credential(ProposerCredentialQuery {
+                block_root: [0xCD; 32],
+                proposer_index_hint: Some(3),
+            })
             .expect("stub resolver should produce a credential");
 
         assert_eq!(credential.scheme_id, 7);

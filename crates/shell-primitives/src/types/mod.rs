@@ -9,7 +9,7 @@ pub use self::scalars::{
 };
 pub use self::state::{
     canonicalize_execution_address, compare_state_keys, encode_state_key, StateKey, StateKeyBytes,
-    StateWitness,
+    StateWitness, WitnessProofShape,
 };
 pub use self::transactions::{
     Authorization, BasicTransactionPayload, CreateTransactionPayload, SigningData,

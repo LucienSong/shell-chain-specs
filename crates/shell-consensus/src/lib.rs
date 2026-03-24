@@ -6,6 +6,7 @@ extern crate alloc;
 pub mod execution_bridge;
 pub mod header_checks;
 pub mod import;
+pub mod objects;
 pub mod outcomes;
 pub mod sidecars;
 
@@ -17,6 +18,9 @@ pub use crate::header_checks::{
 pub use crate::import::{
     revalidate_body_transactions, verify_body_binding, BlockImportConfig, BlockImportPipeline,
     BlockImportServices, ConsensusBody, TransactionRevalidator,
+};
+pub use crate::objects::{
+    CanonicalBlock, CanonicalBlockBody, CanonicalBlockHeader, CanonicalBlockSidecar,
 };
 pub use crate::outcomes::{
     BlockImportOutcome, ConsensusError, HeaderBodyRootMismatchError, SidecarBlockRootMismatchError,
@@ -35,11 +39,11 @@ mod tests {
         UnsupportedSchemeError,
     };
     use shell_execution::{BlockExecutionOutcome, ExecutionReceipt};
-    use shell_mempool::ValidationError;
+    use shell_mempool::{MultiAuthorizationPolicy, ValidationError};
     use shell_primitives::{
-        Authorization, BasicTransactionPayload, PrimitiveError, ProposerCredential,
-        ProposerCredentialResolutionError, ProtocolObject, Root, TransactionEnvelope,
-        TransactionPayload, TransactionPayloadSsz,
+        Authorization, BasicTransactionPayload, InvalidCredentialEncodingError, PrimitiveError,
+        ProposerCredential, ProposerCredentialQuery, ProposerCredentialResolutionError,
+        ProtocolObject, Root, TransactionEnvelope, TransactionPayload, TransactionPayloadSsz,
     };
     use shell_state::StateError;
 
@@ -123,14 +127,14 @@ mod tests {
 
     struct CountingResolver {
         calls: Cell<usize>,
-        should_fail: bool,
+        failure: Option<ProposerCredentialResolutionError>,
     }
 
     impl CountingResolver {
         fn new() -> Self {
             Self {
                 calls: Cell::new(0),
-                should_fail: false,
+                failure: None,
             }
         }
 
@@ -142,12 +146,13 @@ mod tests {
     impl shell_primitives::ProposerCredentialResolver for CountingResolver {
         fn resolve_proposer_credential(
             &self,
-            _block_root: &Root,
-            _proposer_index_hint: Option<u64>,
+            query: ProposerCredentialQuery,
         ) -> Result<ProposerCredential, ProposerCredentialResolutionError> {
             self.calls.set(self.calls.get() + 1);
-            if self.should_fail {
-                return Err(ProposerCredentialResolutionError::NotFound);
+            assert_eq!(query.block_root, [0x01; 32]);
+            assert_eq!(query.proposer_index_hint, Some(7));
+            if let Some(error) = self.failure {
+                return Err(error);
             }
 
             Ok(ProposerCredential {
@@ -207,23 +212,34 @@ mod tests {
 
     struct CountingRevalidator {
         calls: Cell<usize>,
+        last_policy: Cell<MultiAuthorizationPolicy>,
     }
 
     impl CountingRevalidator {
         fn new() -> Self {
             Self {
                 calls: Cell::new(0),
+                last_policy: Cell::new(MultiAuthorizationPolicy::RequireAll),
             }
         }
 
         fn calls(&self) -> usize {
             self.calls.get()
         }
+
+        fn last_policy(&self) -> MultiAuthorizationPolicy {
+            self.last_policy.get()
+        }
     }
 
     impl TransactionRevalidator for CountingRevalidator {
-        fn revalidate(&self, _transaction: &TransactionEnvelope) -> Result<(), ValidationError> {
+        fn revalidate(
+            &self,
+            _transaction: &TransactionEnvelope,
+            policy: MultiAuthorizationPolicy,
+        ) -> Result<(), ValidationError> {
             self.calls.set(self.calls.get() + 1);
+            self.last_policy.set(policy);
             Ok(())
         }
     }
@@ -349,6 +365,7 @@ mod tests {
             header_prefilter: HeaderPrefilterConfig {
                 max_witness_bytes: Some(256),
             },
+            multi_authorization_policy: MultiAuthorizationPolicy::RequireAll,
         });
         let resolver = CountingResolver::new();
         let dispatcher = CountingDispatcher::new();
@@ -375,6 +392,10 @@ mod tests {
         assert_eq!(resolver.calls(), 1);
         assert_eq!(dispatcher.validator_calls(), 1);
         assert_eq!(revalidator.calls(), body.transactions.len());
+        assert_eq!(
+            revalidator.last_policy(),
+            MultiAuthorizationPolicy::RequireAll
+        );
         assert_eq!(preparer.calls(), 1);
         assert_eq!(engine.calls(), 1);
     }
@@ -387,6 +408,7 @@ mod tests {
             header_prefilter: HeaderPrefilterConfig {
                 max_witness_bytes: Some(512),
             },
+            multi_authorization_policy: MultiAuthorizationPolicy::RequireAll,
         });
         let resolver = CountingResolver::new();
         let dispatcher = CountingDispatcher::new();
@@ -497,6 +519,59 @@ mod tests {
     }
 
     #[test]
+    fn resolver_failures_propagate_before_dispatch() {
+        let (header, body, sidecar, execution) = sample_import_fixture();
+        let pipeline = BlockImportPipeline::new(BlockImportConfig::default());
+        let resolver = CountingResolver {
+            calls: Cell::new(0),
+            failure: Some(
+                ProposerCredentialResolutionError::InvalidCredentialEncoding(
+                    InvalidCredentialEncodingError {
+                        scheme_id: 9,
+                        context: "validator public key bytes failed scheme decode",
+                    },
+                ),
+            ),
+        };
+        let dispatcher = CountingDispatcher::new();
+        let revalidator = CountingRevalidator::new();
+        let preparer = CountingWitnessPreparer::new();
+        let engine = FixedExecutionEngine::new(execution);
+
+        let error = pipeline
+            .import_block(
+                &header,
+                &body,
+                &sidecar,
+                BlockImportServices {
+                    resolver: &resolver,
+                    dispatcher: &dispatcher,
+                    revalidator: &revalidator,
+                    preparer: &preparer,
+                    execution_engine: &engine,
+                },
+            )
+            .expect_err("invalid proposer credentials should fail before validator dispatch");
+
+        assert_eq!(
+            error,
+            ConsensusError::ProposerCredentialResolution(
+                ProposerCredentialResolutionError::InvalidCredentialEncoding(
+                    InvalidCredentialEncodingError {
+                        scheme_id: 9,
+                        context: "validator public key bytes failed scheme decode",
+                    },
+                ),
+            )
+        );
+        assert_eq!(resolver.calls(), 1);
+        assert_eq!(dispatcher.validator_calls(), 0);
+        assert_eq!(revalidator.calls(), 0);
+        assert_eq!(preparer.calls(), 0);
+        assert_eq!(engine.calls(), 0);
+    }
+
+    #[test]
     fn consensus_traits_are_object_safe() {
         struct DummyVerifier;
 
@@ -519,6 +594,7 @@ mod tests {
             fn revalidate(
                 &self,
                 _transaction: &TransactionEnvelope,
+                _policy: MultiAuthorizationPolicy,
             ) -> Result<(), ValidationError> {
                 Ok(())
             }

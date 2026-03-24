@@ -34,7 +34,7 @@ Until a full fixture corpus is checked in, this repository should treat the foll
 - User-path authorization signatures above 8 KB are rejected by default as a local stress-control rule.
 - Witness ordering checks run against one canonical `StateKey` comparator before proof reconstruction.
 - `header.witness_bytes` and validator-path signature-size controls are configurable ingress guards, not frozen consensus constants.
-- Witness compression, canonical witness encoding, richer multi-authorization semantics, and parts of the detailed proof-node layout remain provisional and must be tested as provisional behavior.
+- Witness compression, canonical witness encoding, richer threshold or role-based multi-authorization semantics, and parts of the detailed proof-node layout remain provisional and must be tested as provisional behavior. The current local baseline still requires every authorization present in a transaction envelope to verify successfully.
 
 ## 3. Fixture Placement and Naming
 
@@ -44,6 +44,9 @@ When repository-level fixtures are added, they should live under:
 vectors/
 ├── transactions/
 ├── blocks/
+├── root-checks/
+├── peer-actions/
+├── validation-order/
 └── witnesses/
 ```
 
@@ -70,7 +73,7 @@ At minimum, each vector should carry:
 | Field | Meaning |
 |---|---|
 | `id` | Stable unique vector identifier |
-| `category` | `transaction`, `signature`, `witness`, `block`, or `policy` |
+| `category` | `transaction`, `signature`, `witness`, `block`, `validation-order`, or `peer-action` |
 | `description` | Human-readable explanation of the invariant being tested |
 | `input` | Canonical encoded object or structured object fields needed to build it |
 | `expected_outcome` | `accept`, `reject`, or `policy_reject` |
@@ -98,8 +101,50 @@ Recommended extra fields by category:
   - `state_root`
   - `receipts_root`
 
+- end-to-end root-check vectors
+  - `body.transaction_vector_ids`
+  - `sidecar.witness_vector_ids`
+  - `execution.steps[*].transaction_vector_id`
+  - `execution.steps[*].witness_vector_id`
+  - `transactions_root`
+  - `execution_witnesses_root`
+  - `state_root`
+  - `receipts_root`
+
 Fixture format is not yet frozen, but it should be chosen once at the repository level and reused consistently.
 Tests should not require each crate to invent its own incompatible fixture schema.
+The current repository-local default in Rust is the shared `CanonicalBlockHeader` / `CanonicalBlockBody` / `CanonicalBlockSidecar` object family, with vector fields mapping onto those structs rather than per-test ad hoc shapes.
+
+Validation-order vectors now use one shared fixture contract across `shell-mempool` and `shell-consensus`.
+The top-level fields stay aligned with the repository-wide vector shape above, and the `input` object carries a tagged `layer` field:
+
+| Field | Meaning |
+|---|---|
+| `input.layer` | `shell-mempool` or `shell-consensus` |
+| `expected_effects.transaction_signature_verifications` | expected transaction-path verifier calls |
+| `expected_effects.proposer_credential_resolutions` | expected proposer credential lookups |
+| `expected_effects.validator_signature_verifications` | expected validator-path verifier calls |
+| `expected_effects.transaction_revalidations` | expected per-transaction revalidation calls during block import |
+| `expected_effects.witness_preparations` | expected witness reconstruction / preparation calls |
+| `expected_effects.execution_calls` | expected execution-engine calls |
+
+The `shell-mempool` branch of the shared contract records transaction payload, authorizations, fee policy, and optional observed nonce.
+The `shell-consensus` branch records header/body/sidecar shapes, execution-root expectations, prefilter limits, resolver inputs, and whether validator signature dispatch should accept or reject.
+Both crates consume the same JSON schema and the same `vectors/validation-order/*.json` directory.
+
+Peer-action vectors now use a separate shared contract under `vectors/peer-actions/*.json`.
+They keep the same top-level metadata fields, but the `input` object records:
+
+| Field | Meaning |
+|---|---|
+| `input.origin` | `gossip`, `fetch`, `sync`, or a local origin kind |
+| `input.source` | `validation_outcome`, `mempool_error`, or `consensus_error` |
+| `input.stage` | lower-layer `ValidationStage` for mempool-originated errors |
+| `input.error.kind` | structured lower-layer error variant name reused by `shell-network` tests |
+| `expected_action` | concrete peer action (`accept`, `ignore`, `adjust_reputation`, `disconnect`) plus the expected hint and optional delta |
+
+These vectors intentionally consume existing `ValidationOutcome`, `ValidationError`, and `ConsensusError` shapes so `shell-network` tests exercise translation logic without recreating validation rules.
+The same mempool-side `input` contract is also reused by `vectors/mempool-policy/*.json` so fee-floor and nonce/replay vectors do not drift into a second ad hoc fixture shape.
 
 ## 5. Outcome Classes
 
@@ -243,6 +288,7 @@ The first complete test corpus should cover the following matrix.
 | `sig-supported-invalid-*` | signature bytes fail verification for the same scheme | reject | `shell-crypto` |
 | `sig-validator-valid-*` | validator-path signature verifies successfully | accept | `shell-crypto` |
 | `sig-validator-invalid-*` | validator-path signature fails verification | reject | `shell-crypto` |
+| `sig-validator-unsupported-scheme-*` | validator-path scheme lookup fails before verification and stays invalid-signature grade downstream | reject | `shell-crypto` |
 | `sig-unsupported-scheme-*` | unsupported `scheme_id` is rejected | reject | `shell-crypto` |
 | `sig-user-oversize-*` | user-path signature larger than 8 KB fails local stress limit | reject | `shell-mempool` + `shell-crypto` |
 | `sig-validator-oversize-*` | validator-path size guard is handled as configurable transport policy, not frozen consensus | policy_reject | `shell-consensus` + `shell-network` |
@@ -268,6 +314,20 @@ The first complete test corpus should cover the following matrix.
 | `block-execution-roots-match-*` | computed `state_root` and `receipts_root` match header after execution | accept | `shell-execution` + `shell-consensus` |
 | `block-execution-roots-mismatch-*` | execution output fails final root comparison | reject | `shell-execution` + `shell-consensus` |
 
+### 7.5.1 End-to-End Root-Check Vectors
+
+These vectors intentionally sit one layer above the simple block-binding fixtures.
+They reuse canonical transaction fixtures and canonical witness fixtures so `shell-state`, `shell-execution`, and `shell-consensus` all consume the same pre-state, transaction list, execution steps, and final committed roots.
+
+| ID family | Invariant | Expected outcome | Primary crate |
+|---|---|---|---|
+| `root-check-end-to-end-match-*` | referenced transaction fixtures, referenced witness fixtures, execution patches, and final committed roots all agree | accept | `shell-consensus` + `shell-execution` + `shell-state` |
+| `root-check-end-to-end-state-mismatch-*` | the shared witness/execution path computes a different post-state root than the committed header | reject | `shell-consensus` + `shell-execution` |
+| `root-check-end-to-end-receipts-mismatch-*` | the shared witness/execution path computes a different receipts root than the committed header | reject | `shell-consensus` + `shell-execution` |
+
+For now, `transactions_root` and `execution_witnesses_root` in this family use repository-local fixture hashers rather than a frozen final body/sidecar wire codec.
+That keeps the integration contract concrete while remaining honest about the still-open block container encoding.
+
 ### 7.6 Validation-Ordering Vectors
 
 These vectors prove that the implementation preserves cheap-first behavior rather than merely producing the right final answer.
@@ -276,8 +336,9 @@ These vectors prove that the implementation preserves cheap-first behavior rathe
 |---|---|---|---|
 | `order-payload-before-signature-*` | payload-root mismatch is rejected before verifier dispatch | reject | `shell-mempool` |
 | `order-fee-before-signature-*` | fee-floor failure short-circuits signature verification on untrusted gossip | policy_reject | `shell-mempool` |
-| `order-header-before-sidecar-*` | `witness_bytes` prefilter prevents unnecessary sidecar work | policy_reject | `shell-consensus` + `shell-network` |
-| `order-body-root-mismatch-stops-sidecar-*` | transactions-root mismatch prevents sidecar processing | reject | `shell-consensus` |
+| `order-header-before-signature-*` | `witness_bytes` prefilter prevents unnecessary signature, witness, and execution work | policy_reject | `shell-consensus` |
+| `order-body-root-before-signature-*` | transactions-root mismatch prevents validator-path signature verification and later stages | reject | `shell-consensus` |
+| `order-signature-before-witness-*` | proposer-signature failure stops witness preparation and execution | reject | `shell-consensus` |
 | `order-sidecar-before-execution-*` | sidecar binding failure stops execution | reject | `shell-consensus` |
 
 ### 7.7 Operational and Reputation Vectors
@@ -290,6 +351,8 @@ These vectors prove that the implementation preserves cheap-first behavior rathe
 | `peer-fee-spam-*` | repeated fee-floor failures may lower reputation without protocol-malformed handling | policy_reject | `shell-network` |
 
 ### 7.8 Fee and Nonce Policy Vectors
+
+These vectors should reuse the shared mempool fixture fields (`payload`, `authorizations`, `authorization_materials`, `policy`, and optional `observed_nonce`) even though they live outside the validation-order directory.
 
 | ID family | Invariant | Expected outcome | Primary crate |
 |---|---|---|---|
@@ -325,7 +388,7 @@ Those areas currently include:
 
 - witness compression and canonical witness byte encoding,
 - detailed internal proof-node layout,
-- richer multi-authorization semantics,
+- richer threshold or role-based multi-authorization semantics,
 - final validator-path artifact-size rules,
 - some transport ceilings around witness volume.
 

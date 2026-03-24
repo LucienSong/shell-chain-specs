@@ -5,8 +5,8 @@ use serde::Deserialize;
 
 use shell_primitives::{compare_state_keys, encode_state_key, Root, StateKey, StateWitness};
 use shell_state::{
-    ensure_canonical_witness_order, InMemoryAccumulator, StateAccumulator, StateError,
-    WitnessVerifier,
+    ensure_canonical_witness_order, ensure_reference_backend_proof_shape, InMemoryAccumulator,
+    StateAccumulator, StateError, WitnessVerifier,
 };
 
 #[derive(Debug, Deserialize)]
@@ -169,6 +169,7 @@ fn witness_vectors_match_the_reference_proof_contract() {
                 fixture.id
             );
         }
+        assert_fixture_proof_shape_kind(&fixture);
 
         match fixture.expected_outcome.as_str() {
             "accept" => assert_accept(&fixture),
@@ -194,6 +195,8 @@ fn assert_accept(fixture: &WitnessVector) {
         }
         "reference_proof_reconstruction" => {
             let (accumulator, witness) = build_reference_proof_case(fixture);
+            ensure_reference_backend_proof_shape(&witness)
+                .unwrap_or_else(|err| panic!("{} should accept but got {err:?}", fixture.id));
             let expected_root = parse_root(
                 fixture
                     .input
@@ -224,16 +227,18 @@ fn assert_reject(fixture: &WitnessVector) {
         }
         "reference_proof_reconstruction" => {
             let (accumulator, witness) = build_reference_proof_case(fixture);
-            let expected_root = parse_root(
-                fixture
-                    .input
-                    .expected_state_root
-                    .as_ref()
-                    .unwrap_or_else(|| panic!("{} is missing expected_state_root", fixture.id)),
-            );
-            let err = accumulator
-                .verify_witness(&witness, &expected_root)
-                .expect_err(&format!("{} should reject but accepted", fixture.id));
+            let err = match ensure_reference_backend_proof_shape(&witness) {
+                Ok(()) => {
+                    let expected_root =
+                        parse_root(fixture.input.expected_state_root.as_ref().unwrap_or_else(
+                            || panic!("{} is missing expected_state_root", fixture.id),
+                        ));
+                    accumulator
+                        .verify_witness(&witness, &expected_root)
+                        .expect_err(&format!("{} should reject but accepted", fixture.id))
+                }
+                Err(err) => err,
+            };
             assert_state_error(fixture, expected, err);
         }
         rule => panic!("{} has unrecognised rule {:?}", fixture.id, rule),
@@ -325,6 +330,51 @@ fn build_witnesses(fixture: &WitnessVector) -> Vec<StateWitness> {
         .iter()
         .map(WitnessFixture::to_state_witness)
         .collect()
+}
+
+fn assert_fixture_proof_shape_kind(fixture: &WitnessVector) {
+    let declared = fixture
+        .input
+        .proof_shape_kind
+        .as_ref()
+        .or(fixture.proof_shape_kind.as_ref());
+    let Some(declared) = declared else {
+        return;
+    };
+
+    let witnesses = fixture
+        .input
+        .witness
+        .as_ref()
+        .map(|witness| vec![witness.to_state_witness()])
+        .or_else(|| {
+            fixture.input.witnesses.as_ref().map(|witnesses| {
+                witnesses
+                    .iter()
+                    .map(WitnessFixture::to_state_witness)
+                    .collect()
+            })
+        })
+        .unwrap_or_default();
+
+    if witnesses.is_empty() {
+        return;
+    }
+
+    let actual = if witnesses
+        .iter()
+        .all(|witness| witness.proof_shape().as_str() == "reference_empty")
+    {
+        "reference_empty"
+    } else {
+        "placeholder_committed_nodes"
+    };
+
+    assert_eq!(
+        actual, declared,
+        "{} proof_shape_kind does not match the committed witness shape",
+        fixture.id
+    );
 }
 
 fn fixture_paths() -> Vec<PathBuf> {

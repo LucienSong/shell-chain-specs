@@ -11,3 +11,6 @@ workspace = true
 sha2 = { version = "0.10", default-features = false }
 shell-primitives = { path = "../shell-primitives" }
 shell-state = { path = "../shell-state" }
+
+[dev-dependencies]
+shell-fixtures = { path = "../shell-fixtures" }

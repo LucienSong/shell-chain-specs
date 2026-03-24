@@ -1,0 +1,23 @@
+{
+  "id": "peer-oversize-sidecar-001",
+  "category": "peer-action",
+  "rule": "score_oversize_sidecar_pressure",
+  "description": "A witness-byte ceiling breach is treated as oversize policy pressure and scores the peer without disconnecting.",
+  "input": {
+    "origin": "sync",
+    "source": "consensus_error",
+    "error": {
+      "kind": "witness_byte_limit_exceeded",
+      "max_bytes": 512,
+      "actual_bytes": 1024
+    }
+  },
+  "expected_outcome": "policy_reject",
+  "expected_action": {
+    "action": "adjust_reputation",
+    "delta": -5,
+    "hint": "oversized_object"
+  },
+  "owned_by": "shell-network",
+  "notes": "The vector uses the shared witness-byte guard outcome from shell-consensus instead of inventing a network-only oversize validator."
+}

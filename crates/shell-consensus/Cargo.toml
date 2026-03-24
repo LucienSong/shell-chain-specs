@@ -17,3 +17,4 @@ shell-state = { path = "../shell-state" }
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+shell-fixtures = { path = "../shell-fixtures" }

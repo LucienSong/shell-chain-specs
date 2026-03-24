@@ -1,0 +1,25 @@
+{
+  "id": "peer-fee-spam-001",
+  "category": "peer-action",
+  "rule": "soft_score_fee_spam",
+  "description": "A fee-floor failure remains a policy rejection and lowers remote peer reputation without disconnecting.",
+  "input": {
+    "origin": "gossip",
+    "source": "mempool_error",
+    "stage": "t2",
+    "error": {
+      "kind": "fee_floor",
+      "lane": "payload",
+      "required": 9,
+      "actual": 5
+    }
+  },
+  "expected_outcome": "policy_reject",
+  "expected_action": {
+    "action": "adjust_reputation",
+    "delta": -10,
+    "hint": "policy_rejected"
+  },
+  "owned_by": "shell-network",
+  "notes": "This vector proves shell-network translates the typed mempool policy error into a reputation delta instead of treating it as malformed protocol data."
+}

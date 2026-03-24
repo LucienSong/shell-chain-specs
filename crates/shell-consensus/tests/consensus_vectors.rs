@@ -5,11 +5,12 @@ use serde::Deserialize;
 
 use shell_consensus::{
     execute_and_compare, prefilter_header, verify_body_binding, verify_sidecar_binding,
-    BlockExecutionEngine, ConsensusBody, ConsensusError, ConsensusHeader, ConsensusSidecar,
-    HeaderPrefilterConfig, WitnessPreparer,
+    BlockExecutionEngine, CanonicalBlockBody, CanonicalBlockHeader, CanonicalBlockSidecar,
+    ConsensusBody, ConsensusError, ConsensusHeader, ConsensusSidecar, HeaderPrefilterConfig,
+    WitnessPreparer,
 };
 use shell_execution::{BlockExecutionOutcome, ExecutionError, ExecutionReceipt};
-use shell_primitives::{PrimitiveError, ProtocolObject, Root, TransactionEnvelope};
+use shell_primitives::Root;
 use shell_state::StateError;
 
 #[derive(Debug, Deserialize)]
@@ -110,84 +111,6 @@ struct ConsensusExpectedError {
     max_bytes: Option<u64>,
     #[serde(default)]
     actual_bytes: Option<u64>,
-}
-
-#[derive(Debug, Clone)]
-struct FixtureHeader {
-    block_root: Root,
-    witness_bytes: u64,
-    transactions_root: Root,
-    execution_witnesses_root: Root,
-    state_root: Root,
-    receipts_root: Root,
-    proposer_signature: Vec<u8>,
-    proposer_index_hint: Option<u64>,
-}
-
-impl ProtocolObject for FixtureHeader {
-    fn canonical_root(&self) -> Result<Root, PrimitiveError> {
-        Ok(self.block_root)
-    }
-}
-
-impl ConsensusHeader for FixtureHeader {
-    fn witness_bytes(&self) -> u64 {
-        self.witness_bytes
-    }
-
-    fn transactions_root(&self) -> Root {
-        self.transactions_root
-    }
-
-    fn execution_witnesses_root(&self) -> Root {
-        self.execution_witnesses_root
-    }
-
-    fn state_root(&self) -> Root {
-        self.state_root
-    }
-
-    fn receipts_root(&self) -> Root {
-        self.receipts_root
-    }
-
-    fn proposer_signature(&self) -> &[u8] {
-        &self.proposer_signature
-    }
-
-    fn proposer_index_hint(&self) -> Option<u64> {
-        self.proposer_index_hint
-    }
-}
-
-struct FixtureBody {
-    transactions: Vec<TransactionEnvelope>,
-    computed_root: Root,
-}
-
-impl ConsensusBody for FixtureBody {
-    fn transactions_root(&self) -> Result<Root, PrimitiveError> {
-        Ok(self.computed_root)
-    }
-
-    fn transactions(&self) -> &[TransactionEnvelope] {
-        &self.transactions
-    }
-}
-
-struct FixtureSidecar {
-    block_root: Root,
-    committed_root: Root,
-}
-
-impl ConsensusSidecar for FixtureSidecar {
-    fn block_root(&self) -> Root {
-        self.block_root
-    }
-
-    fn committed_root(&self) -> Root {
-        self.committed_root
-    }
 }
 
 struct NoopWitnessPreparer;
@@ -492,7 +415,7 @@ fn assert_root_mismatch(
     }
 }
 
-fn build_header(fixture: &ConsensusVector) -> FixtureHeader {
+fn build_header(fixture: &ConsensusVector) -> CanonicalBlockHeader {
     let header = &fixture.input.header;
 
     assert!(
@@ -512,12 +435,15 @@ fn build_header(fixture: &ConsensusVector) -> FixtureHeader {
         fixture.id
     );
 
-    FixtureHeader {
+    CanonicalBlockHeader {
         block_root: fixture
             .input
             .computed_block_root
             .as_ref()
             .map_or([0u8; 32], |root| parse_root(root)),
+        block_number: header.block_number,
+        timestamp: header.timestamp,
+        parent_root: parse_root(&header.parent_root),
         witness_bytes: header.witness_bytes,
         transactions_root: parse_root(&header.transactions_root),
         execution_witnesses_root: parse_root(&header.execution_witnesses_root),
@@ -528,7 +454,9 @@ fn build_header(fixture: &ConsensusVector) -> FixtureHeader {
     }
 }
 
-fn build_body_binding_case(fixture: &ConsensusVector) -> (FixtureHeader, FixtureBody) {
+fn build_body_binding_case(
+    fixture: &ConsensusVector,
+) -> (CanonicalBlockHeader, CanonicalBlockBody) {
     let header = build_header(fixture);
     let body = fixture
         .input
@@ -551,9 +479,9 @@ fn build_body_binding_case(fixture: &ConsensusVector) -> (FixtureHeader, Fixture
 
     (
         header,
-        FixtureBody {
+        CanonicalBlockBody {
             transactions: Vec::new(),
-            computed_root: parse_root(
+            transactions_root: parse_root(
                 fixture
                     .input
                     .computed_transactions_root
@@ -566,7 +494,7 @@ fn build_body_binding_case(fixture: &ConsensusVector) -> (FixtureHeader, Fixture
     )
 }
 
-fn build_sidecar_case(fixture: &ConsensusVector) -> (FixtureHeader, FixtureSidecar) {
+fn build_sidecar_case(fixture: &ConsensusVector) -> (CanonicalBlockHeader, CanonicalBlockSidecar) {
     let header = build_header(fixture);
     let sidecar = fixture
         .input
@@ -590,15 +518,16 @@ fn build_sidecar_case(fixture: &ConsensusVector) -> (FixtureHeader, FixtureSidec
 
     (
         header,
-        FixtureSidecar {
+        CanonicalBlockSidecar {
             block_root: parse_root(&sidecar.block_root),
-            committed_root: parse_root(
+            execution_witnesses_root: parse_root(
                 fixture
                     .input
                     .computed_sidecar_root
                     .as_ref()
                     .unwrap_or_else(|| panic!("{} is missing computed_sidecar_root", fixture.id)),
             ),
+            witnesses: Vec::new(),
         },
     )
 }
@@ -606,9 +535,9 @@ fn build_sidecar_case(fixture: &ConsensusVector) -> (FixtureHeader, FixtureSidec
 fn build_execution_case(
     fixture: &ConsensusVector,
 ) -> (
-    FixtureHeader,
-    FixtureBody,
-    FixtureSidecar,
+    CanonicalBlockHeader,
+    CanonicalBlockBody,
+    CanonicalBlockSidecar,
     FixedExecutionEngine,
 ) {
     let (header, body) = build_body_binding_case(fixture);

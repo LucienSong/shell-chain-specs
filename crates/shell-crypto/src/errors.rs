@@ -1,6 +1,13 @@
 use crate::traits::VerificationPath;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignatureLimitKind {
+    RepositoryRule,
+    LocalTransportGuard,
+    Scheme,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UnsupportedSchemeError {
     pub scheme_id: u8,
 }
@@ -10,6 +17,7 @@ pub struct SignatureSizeExceededError {
     pub max_size: usize,
     pub actual_size: usize,
     pub path: VerificationPath,
+    pub kind: SignatureLimitKind,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

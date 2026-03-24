@@ -10,3 +10,6 @@ workspace = true
 [dependencies]
 shell-crypto = { path = "../shell-crypto" }
 shell-primitives = { path = "../shell-primitives" }
+
+[dev-dependencies]
+shell-fixtures = { path = "../shell-fixtures" }

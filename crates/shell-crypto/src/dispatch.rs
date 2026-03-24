@@ -1,7 +1,8 @@
 use alloc::{boxed::Box, vec::Vec};
-use core::cmp;
 
-use crate::errors::{CryptoError, SignatureSizeExceededError, UnsupportedSchemeError};
+use crate::errors::{
+    CryptoError, SignatureLimitKind, SignatureSizeExceededError, UnsupportedSchemeError,
+};
 use crate::schemes::DEFAULT_USER_PATH_MAX_SIGNATURE_SIZE;
 use crate::traits::{
     SignatureDispatcher, SignatureVerificationRequest, SignatureVerifier, VerificationPath,
@@ -58,13 +59,14 @@ impl VerifierRegistry {
                 scheme_id,
             }))?;
 
-        if let Some(max_size) = self.max_signature_size(verifier, path) {
-            if request.signature.len() > max_size {
+        if let Some(limit) = self.max_signature_size(verifier, path) {
+            if request.signature.len() > limit.max_size {
                 return Err(CryptoError::SignatureSizeExceeded(
                     SignatureSizeExceededError {
-                        max_size,
+                        max_size: limit.max_size,
                         actual_size: request.signature.len(),
                         path,
+                        kind: limit.kind,
                     },
                 ));
             }
@@ -79,20 +81,42 @@ impl VerifierRegistry {
         &self,
         verifier: &dyn SignatureVerifier,
         path: VerificationPath,
-    ) -> Option<usize> {
-        let dispatcher_limit = match path {
-            VerificationPath::TransactionAuthorization => {
-                Some(self.config.user_path_max_signature_size)
-            }
-            VerificationPath::ValidatorMessage => self.config.validator_path_max_signature_size,
+    ) -> Option<ResolvedSignatureLimit> {
+        let mut chosen = match path {
+            VerificationPath::TransactionAuthorization => Some(ResolvedSignatureLimit {
+                max_size: self.config.user_path_max_signature_size,
+                kind: SignatureLimitKind::RepositoryRule,
+            }),
+            VerificationPath::ValidatorMessage => self
+                .config
+                .validator_path_max_signature_size
+                .map(|max_size| ResolvedSignatureLimit {
+                    max_size,
+                    kind: SignatureLimitKind::LocalTransportGuard,
+                }),
         };
 
-        match (dispatcher_limit, verifier.max_signature_size(path)) {
-            (Some(left), Some(right)) => Some(cmp::min(left, right)),
-            (Some(limit), None) | (None, Some(limit)) => Some(limit),
-            (None, None) => None,
+        if let Some(max_size) = verifier.max_signature_size(path) {
+            let verifier_limit = ResolvedSignatureLimit {
+                max_size,
+                kind: SignatureLimitKind::Scheme,
+            };
+            if chosen
+                .map(|current| verifier_limit.max_size < current.max_size)
+                .unwrap_or(true)
+            {
+                chosen = Some(verifier_limit);
+            }
         }
+
+        chosen
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ResolvedSignatureLimit {
+    max_size: usize,
+    kind: SignatureLimitKind,
 }
 
 impl SignatureDispatcher for VerifierRegistry {

@@ -1,7 +1,10 @@
-use shell_primitives::{Root, StateWitness};
+use shell_primitives::{Root, StateWitness, WitnessProofShape};
 
 use crate::errors::{StateError, WitnessOrderingError};
 use crate::keys::compare_state_keys;
+
+pub const REFERENCE_BACKEND_PROOF_SHAPE_CONTEXT: &str =
+    "reference backend derives proof paths locally and does not interpret committed proof bytes";
 
 pub trait WitnessVerifier {
     fn verify_witness(
@@ -38,4 +41,13 @@ pub fn ensure_canonical_witness_order(witnesses: &[StateWitness]) -> Result<(), 
     }
 
     Ok(())
+}
+
+pub fn ensure_reference_backend_proof_shape(witness: &StateWitness) -> Result<(), StateError> {
+    match witness.proof_shape() {
+        WitnessProofShape::ReferenceEmpty => Ok(()),
+        WitnessProofShape::PlaceholderCommittedNodes => Err(StateError::UnsupportedProofShape(
+            REFERENCE_BACKEND_PROOF_SHAPE_CONTEXT,
+        )),
+    }
 }

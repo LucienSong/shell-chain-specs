@@ -235,11 +235,16 @@ pub struct ProposerCredential {
     pub public_key_material: MockProgressiveByteList,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProposerCredentialQuery {
+    pub block_root: Root,
+    pub proposer_index_hint: Option<u64>,
+}
+
 pub trait ProposerCredentialResolver {
     fn resolve_proposer_credential(
         &self,
-        block_root: &Root,
-        proposer_index_hint: Option<u64>,
+        query: ProposerCredentialQuery,
     ) -> Result<ProposerCredential, ProposerCredentialResolutionError>;
 }
 ```
@@ -248,8 +253,9 @@ Repository-local meaning:
 
 - `scheme_id` is the validator-path signature family selector consumed by `shell-crypto`.
 - `public_key_material` stays opaque bytes at this layer so the repository does not prematurely freeze a validator-key encoding beyond what the selected scheme requires.
-- `block_root` is provided because a resolver may need block-context-aware scheduling or epoch snapshots.
-- `proposer_index_hint` is optional because the eventual block-header shape may carry a direct proposer identifier, but the repository does not yet freeze that header field here.
+- `query.block_root` is provided because a resolver may need block-context-aware scheduling or epoch snapshots.
+- `query.proposer_index_hint` is optional because the eventual block-header shape may carry a direct proposer identifier, but the repository does not yet freeze that header field here.
+- `ProposerCredentialResolutionError::InvalidCredentialEncoding { scheme_id, context }` is the locally closed way to report malformed credential bytes without exposing a concrete validator-storage model.
 
 This closes only the **resolver boundary**. It does **not** close:
 
@@ -363,6 +369,13 @@ In practice, a useful Rust split is:
 
 That split keeps `shell-state` aligned with validation ordering and avoids coupling execution optimizations to a still-open wire proof shape.
 
+For the current repository milestone, one narrower local classification is now closed to reduce churn across fixtures and validation code:
+
+- `reference_empty`: the committed witness carries no interpreted proof nodes, and the reference backend derives the path locally,
+- `placeholder_committed_nodes`: committed proof nodes are present, but their internal meaning is still provisional and must not be treated as a finalized wire proof contract.
+
+This classification is intentionally smaller than a final protocol proof model.  It exists so vectors, consensus fixtures, and state helpers can share one boundary without pretending that the upstream proof-node layout is already frozen.
+
 ### 4.3 Canonical ordering requirements
 
 For transaction witness sidecars, upstream-facing validation now expects `state_proofs` to be canonically ordered by `StateKey` before proof reconstruction.
@@ -413,7 +426,47 @@ The canonical ordering comparator required by §4.3 operates on exactly this byt
 **`canonicalize_execution_address` placement.**
 This function performs the state-key derivation for execution addresses (left-padding a 20-byte address to a 32-byte tree key).  It belongs in `shell-state::keys` (see `crate-structure.md §3.3` and `§6`).  It must not be re-implemented inline elsewhere; all address-to-tree-key conversions in `shell-state`, `shell-execution`, and `shell-consensus` must call the same shared function.  Placing it outside `shell-state` in a lower crate (e.g. `shell-primitives`) is also acceptable if the function is needed there first, provided it remains a single implementation that higher crates re-use rather than re-derive.
 
-## 5. Practical implementation checklist
+## 5. Repository-local canonical block objects
+
+Consensus, network, and vector work now share one repository-local concrete object family for the currently closed block-import boundary:
+
+```rust
+pub struct CanonicalBlockHeader {
+    pub block_root: Root,
+    pub block_number: u64,
+    pub timestamp: u64,
+    pub parent_root: Root,
+    pub witness_bytes: u64,
+    pub transactions_root: Root,
+    pub execution_witnesses_root: Root,
+    pub state_root: Root,
+    pub receipts_root: Root,
+    pub proposer_signature: MockProgressiveByteList,
+    pub proposer_index_hint: Option<u64>,
+}
+
+pub struct CanonicalBlockBody {
+    pub transactions: Vec<TransactionEnvelope>,
+    pub transactions_root: Root,
+}
+
+pub struct CanonicalBlockSidecar {
+    pub block_root: Root,
+    pub execution_witnesses_root: Root,
+    pub witnesses: Vec<StateWitness>,
+}
+```
+
+Repository-local meaning:
+
+- these structs close the **shared in-memory contract** used by consensus, network, and fixtures,
+- they do **not** by themselves freeze a final SSZ block/header/body/sidecar codec,
+- `block_root`, `transactions_root`, and `execution_witnesses_root` remain explicit committed values so decoders and fixtures can bind objects without inventing a premature canonical codec,
+- `CanonicalBlockSidecar.witnesses` carries committed transport witnesses, while any optimized proof index remains derived and local-only.
+
+The repository may still accept trait-based adapters at crate boundaries, but these concrete structs are the default local shape that downstream work should reuse instead of inventing per-test header/body/sidecar structs.
+
+## 6. Practical implementation checklist
 
 For future Rust work, the binding is in good shape if it satisfies all of the following:
 

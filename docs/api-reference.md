@@ -50,9 +50,11 @@ Callers should depend on stable traits rather than on concrete post-quantum libr
 
 For validator-path verification, higher layers should also depend on a lower-layer proposer-credential resolver boundary rather than on a concrete validator-state backend. In this repository milestone, the shared contract is effectively:
 
-- input: `block_root` plus an optional proposer-index hint,
+- input: `ProposerCredentialQuery { block_root, proposer_index_hint }`,
 - output: `(scheme_id, public_key_material)`,
 - ownership: resolver trait in `shell-primitives`, orchestration in `shell-consensus`, signature dispatch in `shell-crypto`.
+
+Validator-path verification errors also distinguish local transport pressure from consensus-invalid data: configurable validator-message size guards stay policy-grade, while malformed credential bytes, unsupported schemes, and cryptographic failures remain structured invalid-block or invalid-signature outcomes.
 
 ### 4. State and Witness Interfaces
 

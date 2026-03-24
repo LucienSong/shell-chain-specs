@@ -1,0 +1,26 @@
+{
+  "id": "sig-validator-local-guard-001",
+  "category": "crypto",
+  "rule": "validator_transport_guard",
+  "description": "A validator-message signature that exceeds the configured local transport guard is rejected before cryptographic verification and remains distinguishable from scheme-native consensus failures.",
+  "input": {
+    "scheme_id": 0,
+    "public_key_hex": "0x8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+    "signing_root_hex": "0x5555555555555555555555555555555555555555555555555555555555555555",
+    "signature_hex": "0x1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+    "verification_path": "validator_message",
+    "dispatcher_config": {
+      "validator_path_max_signature_size": 32
+    }
+  },
+  "expected_outcome": "reject",
+  "expected_error": {
+    "kind": "SignatureSizeExceeded",
+    "max_size": 32,
+    "actual_size": 65,
+    "path": "validator_message",
+    "limit_kind": "local_transport_guard"
+  },
+  "owned_by": "shell-crypto",
+  "notes": "The same 65-byte artifact would also exceed Ed25519's native 64-byte size, but this vector proves the dispatcher preserves the stricter validator-path transport classification when the local guard fires first."
+}

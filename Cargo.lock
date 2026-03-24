@@ -258,6 +258,7 @@ dependencies = [
  "serde_json",
  "shell-crypto",
  "shell-execution",
+ "shell-fixtures",
  "shell-mempool",
  "shell-primitives",
  "shell-state",
@@ -270,6 +271,7 @@ dependencies = [
  "ed25519-dalek",
  "serde",
  "serde_json",
+ "shell-fixtures",
  "shell-primitives",
 ]
 
@@ -278,8 +280,19 @@ name = "shell-execution"
 version = "0.1.0"
 dependencies = [
  "sha2",
+ "shell-fixtures",
  "shell-primitives",
  "shell-state",
+]
+
+[[package]]
+name = "shell-fixtures"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+ "shell-primitives",
 ]
 
 [[package]]
@@ -287,6 +300,7 @@ name = "shell-mempool"
 version = "0.1.0"
 dependencies = [
  "shell-crypto",
+ "shell-fixtures",
  "shell-primitives",
 ]
 
@@ -295,6 +309,8 @@ name = "shell-network"
 version = "0.1.0"
 dependencies = [
  "shell-consensus",
+ "shell-crypto",
+ "shell-fixtures",
  "shell-mempool",
  "shell-primitives",
 ]

@@ -1,0 +1,59 @@
+{
+  "id": "root-check-end-to-end-match-001",
+  "category": "root-check",
+  "rule": "witness_execution_consensus_root_check",
+  "description": "Canonical witness fixtures, execution patches, and final block-import commitments agree on transactions_root, execution_witnesses_root, state_root, and receipts_root.",
+  "input": {
+    "header": {
+      "block_root": "0x9999999999999999999999999999999999999999999999999999999999999999",
+      "block_number": 7,
+      "timestamp": 1001000,
+      "proposer_index": 8,
+      "parent_root": "0x1212121212121212121212121212121212121212121212121212121212121212",
+      "transactions_root": "0x0c1806d9a4aaccbb36324ead7e50118eca3ad93bf457e7140418682b955aa423",
+      "execution_witnesses_root": "0x75b389ee7f488d71ea41a415ec5ad50b1131784673fa0275fafcdf22eff1e363",
+      "state_root": "0xb7ee5c7b575618aa048d08a080d266a374653387963d032b77cd9a1018d8abc9",
+      "receipts_root": "0x90728de98fb08f68cc10cf496b7f121ff65eec03e56fa2cf33f1cb6637c5ec76",
+      "witness_bytes": 192,
+      "proposer_signature_hex": "0x1234"
+    },
+    "body": {
+      "transaction_vector_ids": [
+        "tx-basic-valid-001",
+        "tx-create-valid-001"
+      ]
+    },
+    "sidecar": {
+      "block_root": "0x9999999999999999999999999999999999999999999999999999999999999999",
+      "witness_vector_ids": [
+        "witness-proof-valid-002",
+        "witness-proof-valid-003"
+      ]
+    },
+    "execution": {
+      "steps": [
+        {
+          "transaction_vector_id": "tx-basic-valid-001",
+          "witness_vector_id": "witness-proof-valid-002",
+          "new_leaf_value_hex": "0x01020304",
+          "receipt_status_code": 1,
+          "receipt_output_hex": "0xaa"
+        },
+        {
+          "transaction_vector_id": "tx-create-valid-001",
+          "witness_vector_id": "witness-proof-valid-003",
+          "new_leaf_value_hex": "0x0506070809",
+          "receipt_status_code": 1,
+          "receipt_output_hex": "0xbbcc"
+        }
+      ]
+    }
+  },
+  "expected_outcome": "accept",
+  "owned_by": "shell-consensus",
+  "transactions_root": "0x0c1806d9a4aaccbb36324ead7e50118eca3ad93bf457e7140418682b955aa423",
+  "execution_witnesses_root": "0x75b389ee7f488d71ea41a415ec5ad50b1131784673fa0275fafcdf22eff1e363",
+  "state_root": "0xb7ee5c7b575618aa048d08a080d266a374653387963d032b77cd9a1018d8abc9",
+  "receipts_root": "0x90728de98fb08f68cc10cf496b7f121ff65eec03e56fa2cf33f1cb6637c5ec76",
+  "notes": "The transactions_root and execution_witnesses_root use repository-local fixture hashers so execution and consensus tests can share concrete vectors before a final block-sidecar wire codec is frozen."
+}

@@ -1,0 +1,18 @@
+{
+  "id": "peer-reject-outcome-001",
+  "category": "peer-action",
+  "rule": "disconnect_remote_rejects",
+  "description": "A remote validation rejection maps directly to a disconnect-grade peer action.",
+  "input": {
+    "origin": "gossip",
+    "source": "validation_outcome",
+    "outcome": "reject"
+  },
+  "expected_outcome": "reject",
+  "expected_action": {
+    "action": "disconnect",
+    "hint": "rejected_object"
+  },
+  "owned_by": "shell-network",
+  "notes": "This vector uses the shared lower-layer ValidationOutcome contract instead of introducing a network-only rejection classification."
+}

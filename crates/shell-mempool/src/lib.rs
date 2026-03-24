@@ -9,8 +9,8 @@ pub mod fees;
 pub mod outcomes;
 
 pub use crate::admission::{
-    AdmissionPipeline, AdmissionPolicy, AdmissionStateView, AuthorizationMaterial, NoncePolicy,
-    TransactionAuthorizationDomain,
+    AdmissionPipeline, AdmissionPolicy, AdmissionStateView, AuthorizationMaterial,
+    MultiAuthorizationPolicy, NoncePolicy, TransactionAuthorizationDomain,
 };
 pub use crate::errors::{
     AuthorizationMaterialCountError, FeeFloorError, NoncePolicyError, SigningRootUnavailableError,
@@ -21,7 +21,7 @@ pub use crate::outcomes::{AuthorizationValidated, TentativeAccepted};
 
 #[cfg(test)]
 mod tests {
-    use alloc::{boxed::Box, vec};
+    use alloc::{boxed::Box, vec, vec::Vec};
     use core::cell::Cell;
 
     use shell_crypto::{
@@ -37,21 +37,25 @@ mod tests {
 
     struct CountingDispatcher {
         verify_calls: Cell<usize>,
-        should_fail: bool,
+        fail_on_call: Option<usize>,
     }
 
     impl CountingDispatcher {
         fn new() -> Self {
             Self {
                 verify_calls: Cell::new(0),
-                should_fail: false,
+                fail_on_call: None,
             }
         }
 
         fn with_failure() -> Self {
+            Self::with_failure_on_call(1)
+        }
+
+        fn with_failure_on_call(call: usize) -> Self {
             Self {
                 verify_calls: Cell::new(0),
-                should_fail: true,
+                fail_on_call: Some(call),
             }
         }
 
@@ -77,8 +81,9 @@ mod tests {
             scheme_id: u8,
             _request: &SignatureVerificationRequest<'_>,
         ) -> Result<(), CryptoError> {
-            self.verify_calls.set(self.verify_calls.get() + 1);
-            if self.should_fail {
+            let call = self.verify_calls.get() + 1;
+            self.verify_calls.set(call);
+            if self.fail_on_call == Some(call) {
                 Err(CryptoError::VerificationFailed(VerificationFailure {
                     scheme_id,
                     context: "mock dispatcher rejected the authorization",
@@ -119,10 +124,15 @@ mod tests {
                 max_future_nonce_gap: 1,
             },
             authorization_domain: TransactionAuthorizationDomain::Canonical,
+            multi_authorization_policy: MultiAuthorizationPolicy::RequireAll,
         }
     }
 
     fn sample_envelope() -> TransactionEnvelope {
+        sample_envelope_with_authorization_count(1)
+    }
+
+    fn sample_envelope_with_authorization_count(count: usize) -> TransactionEnvelope {
         let payload =
             TransactionPayloadSsz::new(TransactionPayload::Basic(BasicTransactionPayload {
                 nonce: 5,
@@ -136,14 +146,17 @@ mod tests {
                 ..Default::default()
             }));
         let payload_root = payload.hash_tree_root().expect("payload root must exist");
+        let authorizations = (0..count)
+            .map(|index| Authorization {
+                scheme_id: 0,
+                payload_root,
+                signature: vec![0xAB_u8.wrapping_add(index as u8); 64],
+            })
+            .collect();
 
         TransactionEnvelope {
             payload,
-            authorizations: vec![Authorization {
-                scheme_id: 0,
-                payload_root,
-                signature: vec![0xAB; 64],
-            }],
+            authorizations,
         }
     }
 
@@ -152,6 +165,17 @@ mod tests {
         [AuthorizationMaterial {
             public_key_material: &PUBLIC_KEY,
         }]
+    }
+
+    fn sample_authorization_materials_for_count(
+        count: usize,
+    ) -> Vec<AuthorizationMaterial<'static>> {
+        static PUBLIC_KEY: [u8; 32] = [0x77; 32];
+        (0..count)
+            .map(|_| AuthorizationMaterial {
+                public_key_material: &PUBLIC_KEY,
+            })
+            .collect()
     }
 
     fn sample_address(byte: u8) -> ExecutionAddress {
@@ -272,5 +296,49 @@ mod tests {
 
         assert!(matches!(error, ValidationError::SignatureVerification(_)));
         assert_eq!(dispatcher.verify_calls(), 1);
+    }
+
+    #[test]
+    fn require_all_policy_verifies_every_authorization() {
+        let dispatcher = CountingDispatcher::new();
+        let pipeline = AdmissionPipeline::new(&dispatcher, sample_policy());
+        let envelope = sample_envelope_with_authorization_count(3);
+        let materials = sample_authorization_materials_for_count(3);
+
+        let accepted = pipeline
+            .screen_transaction(&envelope, None)
+            .expect("T1/T2 should accept");
+        let authorized = pipeline
+            .verify_authorizations(&envelope, &accepted, &materials)
+            .expect("all authorizations should be required and verified");
+
+        assert_eq!(authorized.verified_authorization_count, 3);
+        assert_eq!(dispatcher.verify_calls(), 3);
+    }
+
+    #[test]
+    fn require_all_policy_rejects_when_any_authorization_fails() {
+        let dispatcher = CountingDispatcher::with_failure_on_call(2);
+        let pipeline = AdmissionPipeline::new(&dispatcher, sample_policy());
+        let envelope = sample_envelope_with_authorization_count(3);
+        let materials = sample_authorization_materials_for_count(3);
+
+        let accepted = pipeline
+            .screen_transaction(&envelope, None)
+            .expect("T1/T2 should accept");
+        let error = pipeline
+            .verify_authorizations(&envelope, &accepted, &materials)
+            .expect_err("any failed authorization must reject the transaction");
+
+        assert!(matches!(error, ValidationError::SignatureVerification(_)));
+        assert_eq!(dispatcher.verify_calls(), 2);
+    }
+
+    #[test]
+    fn admission_policy_defaults_multi_authorization_to_require_all() {
+        assert_eq!(
+            AdmissionPolicy::default().multi_authorization_policy,
+            MultiAuthorizationPolicy::RequireAll
+        );
     }
 }

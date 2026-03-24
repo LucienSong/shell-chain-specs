@@ -1,0 +1,21 @@
+{
+  "id": "sig-validator-invalid-001",
+  "category": "crypto",
+  "rule": "ed25519_dispatch",
+  "description": "A corrupted Ed25519 validator-message signature is rejected as a cryptographic verification failure.",
+  "input": {
+    "scheme_id": 0,
+    "public_key_hex": "0x8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+    "signing_root_hex": "0x5555555555555555555555555555555555555555555555555555555555555555",
+    "signature_hex": "0x9d982c5b3e535a01abc689e041e24f1db10f30214c9750918e1b5a91a0a5b466e8163f02942cfcd1fa02741473800fd7717c108986588e573cfc347d38e62d03",
+    "verification_path": "validator_message"
+  },
+  "expected_outcome": "reject",
+  "expected_error": {
+    "kind": "VerificationFailed",
+    "scheme_id": 0,
+    "context": "Signature verification failed"
+  },
+  "owned_by": "shell-crypto",
+  "notes": "Only the first signature byte differs from sig-validator-valid-001; consensus should still surface this as an invalid validator-path signature rather than as a transport-policy event."
+}

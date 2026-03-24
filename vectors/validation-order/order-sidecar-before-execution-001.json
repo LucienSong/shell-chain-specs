@@ -1,0 +1,51 @@
+{
+  "id": "order-sidecar-before-execution-001",
+  "category": "validation-order",
+  "rule": "sidecar_before_execution",
+  "description": "A sidecar commitment mismatch stops block import after signature verification and transaction revalidation but before witness preparation and execution.",
+  "input": {
+    "layer": "shell-consensus",
+    "header": {
+      "block_root": "0x0101010101010101010101010101010101010101010101010101010101010101",
+      "transactions_root": "0x0202020202020202020202020202020202020202020202020202020202020202",
+      "execution_witnesses_root": "0x0303030303030303030303030303030303030303030303030303030303030303",
+      "state_root": "0x0404040404040404040404040404040404040404040404040404040404040404",
+      "receipts_root": "0x0505050505050505050505050505050505050505050505050505050505050505",
+      "witness_bytes": 128,
+      "proposer_index": 7,
+      "proposer_signature_hex": "0x9999"
+    },
+    "body": {
+      "transactions_root_mode": "canonical",
+      "transaction_count": 2
+    },
+    "sidecar": {
+      "block_root_mode": "canonical",
+      "committed_root_mode": "flip_first_byte"
+    },
+    "execution": {
+      "post_state_root_mode": "canonical",
+      "receipts_root_mode": "canonical"
+    },
+    "resolver": {
+      "scheme_id": 9,
+      "public_key_hex": "0x5555555555555555555555555555555555555555555555555555555555555555"
+    },
+    "dispatcher": {
+      "validator_signature": "accept"
+    }
+  },
+  "expected_outcome": "reject",
+  "expected_error": {
+    "kind": "SidecarMismatch"
+  },
+  "expected_effects": {
+    "proposer_credential_resolutions": 1,
+    "validator_signature_verifications": 1,
+    "transaction_revalidations": 2,
+    "witness_preparations": 0,
+    "execution_calls": 0
+  },
+  "owned_by": "shell-consensus",
+  "notes": "This vector keeps the sidecar binding gate explicit: execution is only reachable after signature checks, transaction revalidation, and exact witness commitment validation all succeed."
+}

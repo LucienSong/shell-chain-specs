@@ -1,77 +1,16 @@
-use std::fs;
-use std::path::{Path, PathBuf};
-
-use serde::Deserialize;
-
 use shell_crypto::{
-    CryptoError, DispatcherConfig, Ed25519Verifier, SignatureDispatcher,
+    CryptoError, DispatcherConfig, Ed25519Verifier, SignatureDispatcher, SignatureLimitKind,
     SignatureSizeExceededError, SignatureVerificationRequest, UnsupportedSchemeError,
     VerificationFailure, VerificationPath, VerifierRegistry, SCHEME_ID_ED25519,
 };
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct CryptoVector {
-    id: String,
-    category: String,
-    rule: String,
-    description: String,
-    input: CryptoInput,
-    expected_outcome: String,
-    #[serde(default)]
-    expected_error: Option<CryptoExpectedError>,
-    owned_by: String,
-    #[serde(default)]
-    notes: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct CryptoInput {
-    scheme_id: u8,
-    public_key_hex: String,
-    signing_root_hex: String,
-    signature_hex: String,
-    verification_path: VerificationPathInput,
-    #[serde(default)]
-    dispatcher_config: Option<DispatcherConfigInput>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum VerificationPathInput {
-    TransactionAuthorization,
-    ValidatorMessage,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct DispatcherConfigInput {
-    #[serde(default)]
-    user_path_max_signature_size: Option<usize>,
-    #[serde(default)]
-    validator_path_max_signature_size: Option<usize>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct CryptoExpectedError {
-    kind: String,
-    #[serde(default)]
-    scheme_id: Option<u8>,
-    #[serde(default)]
-    max_size: Option<usize>,
-    #[serde(default)]
-    actual_size: Option<usize>,
-    #[serde(default)]
-    path: Option<String>,
-    #[serde(default)]
-    context: Option<String>,
-}
+use shell_fixtures::{
+    crypto_fixture_paths, load_fixture, parse_hex, parse_root, CryptoExpectedError, CryptoVector,
+    VerificationPathInput,
+};
 
 #[test]
 fn crypto_vectors_match_the_dispatch_contract() {
-    let mut paths = fixture_paths();
+    let mut paths = crypto_fixture_paths();
     paths.sort();
 
     assert!(
@@ -80,7 +19,7 @@ fn crypto_vectors_match_the_dispatch_contract() {
     );
 
     for path in paths {
-        let fixture = load_fixture(&path);
+        let fixture: CryptoVector = load_fixture(&path);
 
         assert_eq!(
             path.file_stem().and_then(|stem| stem.to_str()),
@@ -149,11 +88,11 @@ fn dispatch(fixture: &CryptoVector) -> Result<(), CryptoError> {
         signature: &signature,
     };
 
-    match fixture.input.verification_path.verification_path() {
-        VerificationPath::TransactionAuthorization => {
+    match fixture.input.verification_path {
+        VerificationPathInput::TransactionAuthorization => {
             registry.verify_transaction_authorization(fixture.input.scheme_id, &request)
         }
-        VerificationPath::ValidatorMessage => {
+        VerificationPathInput::ValidatorMessage => {
             registry.verify_validator_message(fixture.input.scheme_id, &request)
         }
     }
@@ -231,6 +170,14 @@ fn assert_signature_size_exceeded(
             fixture.id
         );
     }
+    if let Some(expected_kind) = &expected.limit_kind {
+        assert_eq!(
+            actual.kind,
+            parse_signature_limit_kind(expected_kind),
+            "{} kind mismatch",
+            fixture.id
+        );
+    }
 }
 
 fn assert_verification_failed(
@@ -254,49 +201,6 @@ fn assert_verification_failed(
     }
 }
 
-fn fixture_paths() -> Vec<PathBuf> {
-    let vectors_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../vectors/crypto");
-    fs::read_dir(&vectors_dir)
-        .unwrap_or_else(|err| panic!("failed to read {}: {err}", vectors_dir.display()))
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("json"))
-        .collect()
-}
-
-fn load_fixture(path: &Path) -> CryptoVector {
-    let text = fs::read_to_string(path)
-        .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display()));
-    serde_json::from_str(&text)
-        .unwrap_or_else(|err| panic!("failed to parse {}: {err}", path.display()))
-}
-
-fn parse_root(value: &str) -> [u8; 32] {
-    let bytes = parse_hex(value);
-    let len = bytes.len();
-    bytes
-        .try_into()
-        .unwrap_or_else(|_| panic!("expected 32-byte root, got {len} bytes in {value}"))
-}
-
-fn parse_hex(value: &str) -> Vec<u8> {
-    let hex = value
-        .strip_prefix("0x")
-        .unwrap_or_else(|| panic!("hex values must use a 0x prefix: {value}"));
-    assert!(
-        hex.len().is_multiple_of(2),
-        "hex values must contain an even number of digits: {value}"
-    );
-
-    (0..hex.len())
-        .step_by(2)
-        .map(|index| {
-            u8::from_str_radix(&hex[index..index + 2], 16)
-                .unwrap_or_else(|_| panic!("invalid hex byte at offset {index} in {value}"))
-        })
-        .collect()
-}
-
 fn parse_verification_path(value: &str) -> VerificationPath {
     match value {
         "transaction_authorization" => VerificationPath::TransactionAuthorization,
@@ -305,12 +209,12 @@ fn parse_verification_path(value: &str) -> VerificationPath {
     }
 }
 
-impl VerificationPathInput {
-    fn verification_path(&self) -> VerificationPath {
-        match self {
-            Self::TransactionAuthorization => VerificationPath::TransactionAuthorization,
-            Self::ValidatorMessage => VerificationPath::ValidatorMessage,
-        }
+fn parse_signature_limit_kind(value: &str) -> SignatureLimitKind {
+    match value {
+        "repository_rule" => SignatureLimitKind::RepositoryRule,
+        "local_transport_guard" => SignatureLimitKind::LocalTransportGuard,
+        "scheme" => SignatureLimitKind::Scheme,
+        other => panic!("unsupported signature limit kind {other:?}"),
     }
 }
 

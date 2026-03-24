@@ -19,8 +19,11 @@ pub use crate::keys::{
 };
 pub use crate::transition::{StatePatch, StateTransitionApplier, StateTransitionOutcome};
 pub use crate::views::{MetadataAdapter, ReadOnlyStateView};
-pub use crate::witness::{ensure_canonical_witness_order, WitnessVerifier};
-pub use shell_primitives::{StateKey, StateMetadata, StateWitness};
+pub use crate::witness::{
+    ensure_canonical_witness_order, ensure_reference_backend_proof_shape, WitnessVerifier,
+    REFERENCE_BACKEND_PROOF_SHAPE_CONTEXT,
+};
+pub use shell_primitives::{StateKey, StateMetadata, StateWitness, WitnessProofShape};
 
 #[cfg(test)]
 mod tests {

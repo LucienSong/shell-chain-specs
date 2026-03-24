@@ -10,7 +10,8 @@ pub mod traits;
 
 pub use crate::dispatch::{DispatcherConfig, VerifierRegistry};
 pub use crate::errors::{
-    CryptoError, SignatureSizeExceededError, UnsupportedSchemeError, VerificationFailure,
+    CryptoError, SignatureLimitKind, SignatureSizeExceededError, UnsupportedSchemeError,
+    VerificationFailure,
 };
 pub use crate::schemes::DEFAULT_USER_PATH_MAX_SIGNATURE_SIZE;
 pub use crate::schemes::{Ed25519Verifier, SCHEME_ID_ED25519};
@@ -104,6 +105,7 @@ mod tests {
                 max_size: DEFAULT_USER_PATH_MAX_SIGNATURE_SIZE,
                 actual_size: DEFAULT_USER_PATH_MAX_SIGNATURE_SIZE + 1,
                 path: VerificationPath::TransactionAuthorization,
+                kind: SignatureLimitKind::RepositoryRule,
             })
         );
     }
@@ -131,6 +133,35 @@ mod tests {
                 max_size: 128,
                 actual_size: 129,
                 path: VerificationPath::ValidatorMessage,
+                kind: SignatureLimitKind::LocalTransportGuard,
+            })
+        );
+    }
+
+    #[test]
+    fn validator_path_scheme_limit_stays_consensus_relevant() {
+        let mut registry = VerifierRegistry::with_config(DispatcherConfig {
+            user_path_max_signature_size: DEFAULT_USER_PATH_MAX_SIGNATURE_SIZE,
+            validator_path_max_signature_size: Some(512),
+        });
+        registry.register_verifier(Box::new(MockVerifier {
+            scheme_id: 9,
+            max_user_size: None,
+            max_validator_size: Some(256),
+            should_fail: false,
+        }));
+
+        let err = registry
+            .verify_validator_message(9, &sample_request(257))
+            .expect_err("verifier hard limits should still surface on the validator path");
+
+        assert_eq!(
+            err,
+            CryptoError::SignatureSizeExceeded(SignatureSizeExceededError {
+                max_size: 256,
+                actual_size: 257,
+                path: VerificationPath::ValidatorMessage,
+                kind: SignatureLimitKind::Scheme,
             })
         );
     }

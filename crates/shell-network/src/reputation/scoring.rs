@@ -1,6 +1,9 @@
 use shell_consensus::ConsensusError;
+use shell_crypto::{CryptoError, SignatureLimitKind};
 use shell_mempool::ValidationError;
-use shell_primitives::{PrimitiveError, ValidationOutcome, ValidationStage};
+use shell_primitives::{
+    PrimitiveError, ProposerCredentialResolutionError, ValidationOutcome, ValidationStage,
+};
 
 use crate::{
     reputation::{PeerAction, PeerActionHint, ReputationDelta},
@@ -73,12 +76,13 @@ pub fn peer_action_for_consensus_error(
         ConsensusError::Primitive(_) => {
             disconnect_action(origin, PeerActionHint::MalformedAnnouncement)
         }
-        ConsensusError::Domain(_) | ConsensusError::ProposerCredentialResolution(_) => {
-            PeerAction::Ignore {
-                hint: PeerActionHint::InternalError,
-            }
+        ConsensusError::Domain(_) => PeerAction::Ignore {
+            hint: PeerActionHint::InternalError,
+        },
+        ConsensusError::ProposerCredentialResolution(error) => {
+            peer_action_for_proposer_credential_error(origin, *error)
         }
-        ConsensusError::Crypto(_) => disconnect_action(origin, PeerActionHint::InvalidSignature),
+        ConsensusError::Crypto(error) => peer_action_for_consensus_crypto_error(origin, error),
         ConsensusError::TransactionValidation(error) => {
             peer_action_for_mempool_error(origin, ValidationStage::B3, error)
         }
@@ -94,6 +98,44 @@ pub fn peer_action_for_consensus_error(
         | ConsensusError::SidecarBlockRootMismatch(_)
         | ConsensusError::SidecarCommitmentMismatch(_) => {
             disconnect_action(origin, PeerActionHint::InvalidBlock)
+        }
+    }
+}
+
+fn peer_action_for_proposer_credential_error(
+    origin: &NetworkOrigin,
+    error: ProposerCredentialResolutionError,
+) -> PeerAction {
+    match error {
+        ProposerCredentialResolutionError::ResolverUnavailable => PeerAction::Ignore {
+            hint: PeerActionHint::InternalError,
+        },
+        ProposerCredentialResolutionError::NotFound
+        | ProposerCredentialResolutionError::InvalidCredentialEncoding(_) => {
+            disconnect_action(origin, PeerActionHint::InvalidBlock)
+        }
+    }
+}
+
+fn peer_action_for_consensus_crypto_error(
+    origin: &NetworkOrigin,
+    error: &CryptoError,
+) -> PeerAction {
+    match error {
+        CryptoError::SignatureSizeExceeded(size_error)
+            if size_error.path == shell_crypto::VerificationPath::ValidatorMessage
+                && size_error.kind == SignatureLimitKind::LocalTransportGuard =>
+        {
+            policy_action(
+                origin,
+                OVERSIZED_REPUTATION_DELTA,
+                PeerActionHint::OversizedObject,
+            )
+        }
+        CryptoError::UnsupportedScheme(_)
+        | CryptoError::SignatureSizeExceeded(_)
+        | CryptoError::VerificationFailed(_) => {
+            disconnect_action(origin, PeerActionHint::InvalidSignature)
         }
     }
 }
@@ -119,9 +161,11 @@ mod tests {
     use shell_consensus::{
         ConsensusError, HeaderBodyRootMismatchError, WitnessByteLimitExceededError,
     };
+    use shell_crypto::{SignatureSizeExceededError, VerificationPath};
     use shell_mempool::{FeeFloorError, FeeLane, ValidationError};
     use shell_primitives::{
-        GasPrice, MalformedSszError, PrimitiveError, Root, ValidationOutcome, ValidationStage, U256,
+        GasPrice, InvalidCredentialEncodingError, MalformedSszError, PrimitiveError,
+        ProposerCredentialResolutionError, Root, ValidationOutcome, ValidationStage, U256,
     };
 
     use super::*;
@@ -219,6 +263,73 @@ mod tests {
                 OVERSIZED_REPUTATION_DELTA,
                 PeerActionHint::OversizedObject,
             ))
+        );
+    }
+
+    #[test]
+    fn validator_transport_guards_stay_oversize_policy_events() {
+        let error = ConsensusError::Crypto(shell_crypto::CryptoError::SignatureSizeExceeded(
+            SignatureSizeExceededError {
+                max_size: 128,
+                actual_size: 129,
+                path: VerificationPath::ValidatorMessage,
+                kind: SignatureLimitKind::LocalTransportGuard,
+            },
+        ));
+
+        assert_eq!(
+            peer_action_for_consensus_error(&peer_origin(), &error),
+            PeerAction::AdjustReputation(ReputationDelta::new(
+                OVERSIZED_REPUTATION_DELTA,
+                PeerActionHint::OversizedObject,
+            ))
+        );
+    }
+
+    #[test]
+    fn missing_proposer_credentials_disconnect_remote_peers_as_invalid_blocks() {
+        let error = ConsensusError::ProposerCredentialResolution(
+            ProposerCredentialResolutionError::NotFound,
+        );
+
+        assert_eq!(
+            peer_action_for_consensus_error(&peer_origin(), &error),
+            PeerAction::Disconnect {
+                hint: PeerActionHint::InvalidBlock,
+            }
+        );
+    }
+
+    #[test]
+    fn unavailable_resolver_stays_internal() {
+        let error = ConsensusError::ProposerCredentialResolution(
+            ProposerCredentialResolutionError::ResolverUnavailable,
+        );
+
+        assert_eq!(
+            peer_action_for_consensus_error(&peer_origin(), &error),
+            PeerAction::Ignore {
+                hint: PeerActionHint::InternalError,
+            }
+        );
+    }
+
+    #[test]
+    fn invalid_credential_encoding_disconnects_remote_peers_as_invalid_blocks() {
+        let error = ConsensusError::ProposerCredentialResolution(
+            ProposerCredentialResolutionError::InvalidCredentialEncoding(
+                InvalidCredentialEncodingError {
+                    scheme_id: 7,
+                    context: "validator public key bytes failed scheme decode",
+                },
+            ),
+        );
+
+        assert_eq!(
+            peer_action_for_consensus_error(&peer_origin(), &error),
+            PeerAction::Disconnect {
+                hint: PeerActionHint::InvalidBlock,
+            }
         );
     }
 }
