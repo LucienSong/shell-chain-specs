@@ -1,7 +1,9 @@
 use std::cell::Cell;
 use std::path::PathBuf;
 
-use shell_cli::{LocalReferenceError, LocalReferenceRuntime, LocalReferenceScenario};
+use shell_cli::{
+    LocalReferenceError, LocalReferenceRuntime, LocalReferenceScenario, ScenarioShapeError,
+};
 use shell_consensus::{BlockImportConfig, ConsensusError};
 use shell_crypto::{
     CryptoError, SignatureDispatcher, SignatureVerificationRequest, SignatureVerifier,
@@ -176,6 +178,139 @@ fn local_reference_runtime_preserves_receipts_root_mismatch_failures() {
             ExecutionError::ReceiptsRootMismatch { .. }
         ))
     ));
+}
+
+#[test]
+fn local_reference_runtime_rejects_admission_transaction_shape_mismatches_before_validation() {
+    let mut scenario = load_scenario("root-check-end-to-end-match-001.json");
+    let expected = scenario.block.body.transactions.len();
+    scenario.admission_transactions.pop();
+    let dispatcher = PermissiveDispatcher::new();
+    let resolver = FixedResolver;
+    let runtime = LocalReferenceRuntime::new(
+        &dispatcher,
+        &resolver,
+        AdmissionPolicy::default(),
+        BlockImportConfig::default(),
+    );
+
+    let error = runtime
+        .run(&scenario)
+        .expect_err("shape mismatches should fail before transaction validation");
+
+    assert_eq!(
+        error,
+        LocalReferenceError::ScenarioShape(ScenarioShapeError {
+            expected,
+            actual: expected - 1,
+            context: "admission transactions must align one-to-one with block body transactions",
+        })
+    );
+    assert_eq!(dispatcher.transaction_calls(), 0);
+    assert_eq!(dispatcher.validator_calls(), 0);
+}
+
+#[test]
+fn local_reference_runtime_rejects_planned_transaction_shape_mismatches_before_execution() {
+    let mut scenario = load_scenario("root-check-end-to-end-match-001.json");
+    let expected = scenario.block.body.transactions.len();
+    scenario.planned_transactions.pop();
+    let dispatcher = PermissiveDispatcher::new();
+    let resolver = FixedResolver;
+    let runtime = LocalReferenceRuntime::new(
+        &dispatcher,
+        &resolver,
+        AdmissionPolicy::default(),
+        BlockImportConfig::default(),
+    );
+
+    let error = runtime
+        .run(&scenario)
+        .expect_err("planned transaction shape mismatches should fail closed");
+
+    assert_eq!(
+        error,
+        LocalReferenceError::ScenarioShape(ScenarioShapeError {
+            expected,
+            actual: expected - 1,
+            context: "planned transactions must align one-to-one with block body transactions",
+        })
+    );
+    assert_eq!(dispatcher.transaction_calls(), 0);
+    assert_eq!(dispatcher.validator_calls(), 0);
+}
+
+#[test]
+fn local_reference_runtime_rejects_authorization_material_shape_mismatches_before_admission() {
+    let mut scenario = load_scenario("root-check-end-to-end-match-001.json");
+    let expected = scenario.block.body.transactions.len();
+    scenario.transaction_authorization_materials.pop();
+    let dispatcher = PermissiveDispatcher::new();
+    let resolver = FixedResolver;
+    let runtime = LocalReferenceRuntime::new(
+        &dispatcher,
+        &resolver,
+        AdmissionPolicy::default(),
+        BlockImportConfig::default(),
+    );
+
+    let error = runtime
+        .run(&scenario)
+        .expect_err("authorization material shape mismatches should fail closed");
+
+    assert_eq!(
+        error,
+        LocalReferenceError::ScenarioShape(ScenarioShapeError {
+            expected,
+            actual: expected - 1,
+            context:
+                "authorization material entries must align one-to-one with block body transactions",
+        })
+    );
+    assert_eq!(dispatcher.transaction_calls(), 0);
+    assert_eq!(dispatcher.validator_calls(), 0);
+}
+
+#[test]
+fn local_reference_runtime_rejects_duplicate_admission_payload_roots_before_import() {
+    let mut scenario = load_scenario("root-check-end-to-end-match-001.json");
+    assert!(
+        scenario.admission_transactions.len() >= 2,
+        "fixture should contain at least two transactions"
+    );
+    let authorization_count = scenario
+        .admission_transactions
+        .iter()
+        .map(|transaction| transaction.authorizations.len())
+        .sum::<usize>();
+    let duplicate_root = scenario.admission_transactions[0]
+        .payload_root()
+        .expect("fixture transactions should have canonical payload roots");
+    scenario.admission_transactions[1] = scenario.admission_transactions[0].clone();
+    let dispatcher = PermissiveDispatcher::new();
+    let resolver = FixedResolver;
+    let runtime = LocalReferenceRuntime::new(
+        &dispatcher,
+        &resolver,
+        AdmissionPolicy::default(),
+        BlockImportConfig::default(),
+    );
+
+    let error = runtime
+        .run(&scenario)
+        .expect_err("duplicate payload roots should fail before import");
+
+    assert_eq!(
+        error,
+        LocalReferenceError::DuplicateAdmissionPayloadRoot(duplicate_root)
+    );
+    assert_eq!(dispatcher.transaction_calls(), authorization_count);
+    assert_eq!(dispatcher.validator_calls(), 0);
+}
+
+fn load_scenario(name: &str) -> LocalReferenceScenario {
+    let loaded = load_root_check_scenario(&fixture_path(name));
+    LocalReferenceScenario::from_root_check_scenario(&loaded.scenario)
 }
 
 fn fixture_path(name: &str) -> PathBuf {

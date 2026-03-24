@@ -11,11 +11,14 @@ use shell_crypto::{
     VerificationFailure,
 };
 use shell_fixtures::load_root_check_scenario;
-use shell_mempool::{AdmissionPolicy, FeeSchedule};
+use shell_mempool::{
+    AdmissionPolicy, AuthorizationMaterialCountError, FeeSchedule, ValidationError,
+};
 use shell_network::{NetworkConsensusAdapter, NetworkMempoolAdapter, NetworkOrigin, PeerId};
 use shell_primitives::{
     GasPrice, ProposerCredential, ProposerCredentialQuery, ProposerCredentialResolutionError,
-    ProposerCredentialResolver, ValidationOutcome, U256,
+    ProposerCredentialResolver, TransactionEnvelope, TransactionPayload, TransactionPayloadSsz,
+    ValidationOutcome, U256,
 };
 
 struct TestDispatcher {
@@ -43,6 +46,10 @@ impl TestDispatcher {
             })),
             ..Self::permissive()
         }
+    }
+
+    fn transaction_calls(&self) -> usize {
+        self.transaction_calls.get()
     }
 }
 
@@ -172,6 +179,65 @@ fn mempool_adapter_maps_invalid_signatures_to_reject() {
 }
 
 #[test]
+fn mempool_adapter_preserves_missing_authorization_material_errors() {
+    let mut scenario = load_scenario("root-check-end-to-end-match-001.json");
+    scenario.transaction_authorization_materials[0].clear();
+    let dispatcher = TestDispatcher::permissive();
+    let resolver = FixedResolver;
+    let runtime = LocalReferenceRuntime::new(
+        &dispatcher,
+        &resolver,
+        AdmissionPolicy::default(),
+        BlockImportConfig::default(),
+    );
+    let adapter =
+        LocalReferenceNetworkMempoolAdapter::try_new(&runtime, &scenario).expect("adapter builds");
+
+    let error = adapter
+        .validate_gossip_transaction(&peer_origin(), &scenario.admission_transactions[0])
+        .expect_err("missing authorization material should stay an internal error");
+
+    assert_eq!(
+        error,
+        ValidationError::AuthorizationMaterialCount(AuthorizationMaterialCountError {
+            expected: scenario.admission_transactions[0].authorizations.len(),
+            actual: 0,
+        })
+    );
+    assert_eq!(dispatcher.transaction_calls(), 0);
+}
+
+#[test]
+fn mempool_adapter_fails_closed_for_altered_gossip_payloads() {
+    let scenario = load_scenario("root-check-end-to-end-match-001.json");
+    let dispatcher = TestDispatcher::permissive();
+    let resolver = FixedResolver;
+    let runtime = LocalReferenceRuntime::new(
+        &dispatcher,
+        &resolver,
+        AdmissionPolicy::default(),
+        BlockImportConfig::default(),
+    );
+    let adapter =
+        LocalReferenceNetworkMempoolAdapter::try_new(&runtime, &scenario).expect("adapter builds");
+    let mut altered_transaction = scenario.admission_transactions[0].clone();
+    alter_transaction_payload(&mut altered_transaction);
+
+    let error = adapter
+        .validate_gossip_transaction(&peer_origin(), &altered_transaction)
+        .expect_err("altered gossip payloads should fail closed");
+
+    assert_eq!(
+        error,
+        ValidationError::AuthorizationMaterialCount(AuthorizationMaterialCountError {
+            expected: altered_transaction.authorizations.len(),
+            actual: 0,
+        })
+    );
+    assert_eq!(dispatcher.transaction_calls(), 0);
+}
+
+#[test]
 fn consensus_adapter_accepts_reference_blocks() {
     let scenario = load_scenario("root-check-end-to-end-match-001.json");
     let dispatcher = TestDispatcher::permissive();
@@ -259,6 +325,71 @@ fn consensus_adapter_maps_invalid_reference_blocks_to_reject() {
 }
 
 #[test]
+fn consensus_adapter_preserves_missing_authorization_material_errors() {
+    let mut scenario = load_scenario("root-check-end-to-end-match-001.json");
+    scenario.transaction_authorization_materials[0].clear();
+    let dispatcher = TestDispatcher::permissive();
+    let resolver = FixedResolver;
+    let runtime = LocalReferenceRuntime::new(
+        &dispatcher,
+        &resolver,
+        AdmissionPolicy::default(),
+        BlockImportConfig::default(),
+    );
+    let adapter = LocalReferenceNetworkConsensusAdapter::try_new(&runtime, &scenario)
+        .expect("adapter builds");
+
+    let error = adapter
+        .validate_gossip_block(
+            &peer_origin(),
+            &scenario.block.header,
+            &scenario.block.body,
+            &scenario.block.sidecar,
+        )
+        .expect_err("missing authorization material should stay an internal consensus error");
+
+    assert_eq!(
+        error,
+        ConsensusError::TransactionValidation(ValidationError::AuthorizationMaterialCount(
+            AuthorizationMaterialCountError {
+                expected: 1,
+                actual: 0,
+            }
+        ))
+    );
+    assert_eq!(dispatcher.transaction_calls(), 0);
+}
+
+#[test]
+fn consensus_adapter_rejects_altered_gossip_block_inputs() {
+    let scenario = load_scenario("root-check-end-to-end-match-001.json");
+    let dispatcher = TestDispatcher::permissive();
+    let resolver = FixedResolver;
+    let runtime = LocalReferenceRuntime::new(
+        &dispatcher,
+        &resolver,
+        AdmissionPolicy::default(),
+        BlockImportConfig::default(),
+    );
+    let adapter = LocalReferenceNetworkConsensusAdapter::try_new(&runtime, &scenario)
+        .expect("adapter builds");
+    let mut altered_body = scenario.block.body.clone();
+    altered_body.transactions_root[0] ^= 0xFF;
+
+    let outcome = adapter
+        .validate_gossip_block(
+            &peer_origin(),
+            &scenario.block.header,
+            &altered_body,
+            &scenario.block.sidecar,
+        )
+        .expect("altered block bindings should still normalize to reject");
+
+    assert_eq!(outcome, ValidationOutcome::Reject);
+    assert_eq!(dispatcher.transaction_calls(), 0);
+}
+
+#[test]
 fn consensus_adapter_preserves_internal_resolution_errors() {
     let scenario = load_scenario("root-check-end-to-end-match-001.json");
     let dispatcher = TestDispatcher::permissive();
@@ -310,4 +441,18 @@ fn gas_price(value: u64) -> GasPrice {
     let mut bytes = [0u8; 32];
     bytes[..8].copy_from_slice(&value.to_le_bytes());
     GasPrice(U256(bytes))
+}
+
+fn alter_transaction_payload(transaction: &mut TransactionEnvelope) {
+    let altered_payload = match transaction.payload.payload().clone() {
+        TransactionPayload::Basic(mut payload) => {
+            payload.nonce = payload.nonce.wrapping_add(1);
+            TransactionPayload::Basic(payload)
+        }
+        TransactionPayload::Create(mut payload) => {
+            payload.nonce = payload.nonce.wrapping_add(1);
+            TransactionPayload::Create(payload)
+        }
+    };
+    transaction.payload = TransactionPayloadSsz::from(altered_payload);
 }
