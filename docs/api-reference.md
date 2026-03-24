@@ -2,15 +2,22 @@
 
 > Conceptual public API reference for the future `shell-chain` Rust workspace.
 
-## Current Status
+## How to Read This Document
 
-There is **no generated Rust API documentation checked into the repository yet**, even though the repository now contains a buildable workspace bootstrap.
-Today, `shell-primitives` exists as a real crate and `shell-crypto` / `shell-state` / `shell-execution` / `shell-mempool` / `shell-consensus` / `shell-network` exist as early interface crates, but this document still captures the broader public surfaces the workspace is expected to expose as implementation continues.
+`shell-chain` is in an **MVP-local bootstrap** state. This file describes the public-facing boundaries the repository now proves locally and the larger surfaces that still remain intentionally absent.
 
-## Stability Note
+- Treat the crate responsibilities below as the stable direction.
+- Treat concrete type names, module placement, and final runtime entry points as still subject to refinement where the specs say so.
+- Do not read this document as proof that node, RPC, or operator CLI surfaces already exist.
 
-Everything below should be read as a mix of **current early surface** and **forward-looking design contract**.
-Where implementation specs are still evolving, the intended responsibility is stable even if concrete type names, module placement, or crate maturity change.
+## Phase Alignment
+
+| Phase | API meaning |
+|---|---|
+| **docs-and-scaffold** | Lock conceptual crate boundaries, object ownership, and validation entry points. |
+| **MVP** | Prove those contracts work together in a local end-to-end reference flow, with `shell-cli` kept as thin harness glue for fixtures, adapters, and local wiring only. |
+| **Testnet** | Add operator and networking surfaces that survive adversarial use. |
+| **Mainnet** | Freeze production-facing APIs only after the PQ-native protocol is operationally credible. |
 
 ## Planned Public Surface by Area
 
@@ -48,13 +55,13 @@ The crypto layer is expected to provide:
 
 Callers should depend on stable traits rather than on concrete post-quantum libraries.
 
-For validator-path verification, higher layers should also depend on a lower-layer proposer-credential resolver boundary rather than on a concrete validator-state backend. In this repository milestone, the shared contract is effectively:
+For validator-path verification, higher layers should also depend on a proposer-credential resolver boundary rather than on a concrete validator-state backend. In the current phase, the shared contract is effectively:
 
 - input: `ProposerCredentialQuery { block_root, proposer_index_hint }`,
 - output: `(scheme_id, public_key_material)`,
 - ownership: resolver trait in `shell-primitives`, orchestration in `shell-consensus`, signature dispatch in `shell-crypto`.
 
-Validator-path verification errors also distinguish local transport pressure from consensus-invalid data: configurable validator-message size guards stay policy-grade, while malformed credential bytes, unsupported schemes, and cryptographic failures remain structured invalid-block or invalid-signature outcomes.
+Validator-path verification errors should continue to distinguish local transport pressure from consensus-invalid data: configurable validator-message size guards stay policy-grade, while malformed credential bytes, unsupported schemes, and cryptographic failures remain structured invalid-block or invalid-signature outcomes.
 
 ### 4. State and Witness Interfaces
 
@@ -75,28 +82,61 @@ Higher layers are expected to expose structured validation entry points for:
 - witness and proof verification,
 - heavy execution and output-root calculation,
 - block import orchestration,
-- peer-handling consequences for malformed versus merely excessive traffic, including early `shell-network` announcement filtering, fetch policy, and reputation scaffolding.
+- peer-handling consequences for malformed versus merely excessive traffic, including `shell-network` announcement filtering, fetch policy, and reputation scaffolding.
 
 The public contract here is mostly about clean layering and error taxonomy rather than about one monolithic "validate everything" function.
 
-### 6. Operator and Node Entry Points
+### 6. Fixtures and Conformance Inputs
 
-The CLI-facing layer is expected to provide:
+The fixture surface is expected to cover:
 
-- configuration loading,
-- node startup wiring,
+- repository-local vectors under `vectors/`,
+- reusable fixture helpers in `crates/shell-fixtures/`,
+- stable ownership for which crate or spec defines each invariant.
+
+This matters in the current phase because fixture planning is part of the API contract: imports, validation flow, and object encoding should be testable before the full runtime exists.
+
+### 7. Local Harness Boundary and Later Operator Entry Points
+
+Today, `shell-cli` is a repository-local Rust harness crate. Its current boundary is intentionally narrow:
+
+- `LocalReferenceScenario` and owned fixture material for shaping documented local scenarios,
+- `LocalReferenceRuntime` and `LocalReferenceFlowOutcome` for running the reference path in process,
+- thin `shell-network` adapter implementations that reuse the same fixture-backed flow for typed local accept/reject outcomes.
+
+That harness proves a local reference flow can:
+
+- run documented fixture-backed scenarios in process,
+- admit transactions through the documented mempool boundary,
+- verify witnesses and state continuity before execution,
+- execute planned state transitions and compare committed roots,
+- import a block through the documented consensus path.
+
+For MVP-local work, `shell-cli` stays explicitly out of scope for:
+
+- operator lifecycle management,
 - RPC server integration,
-- operational commands once the runtime exists.
+- production/runtime node startup,
+- multi-node networking,
+- stable external automation contracts.
 
-Those entry points are planned, not currently implemented.
+Those operator-facing entry points are planned for later phases. The current `shell-cli` crate is intentionally limited to harness-local reference wiring rather than a real operator or RPC surface.
 
-## What Does Not Exist Yet
+## Intentionally Absent Today
 
 The repository does not yet provide:
 
-- generated `cargo doc` output,
-- a fully stable crate list in `Cargo.toml` (the workspace now includes `shell-network`, but the top-level crate tree is still incomplete),
+- generated `cargo doc` output checked into the repository,
 - versioned Rust APIs,
-- runnable node or CLI binaries.
+- runnable node binaries,
+- real operator or RPC interfaces,
+- a stable `shell-cli` surface beyond the thin MVP-local harness boundary.
 
-When those pieces are added, this document should be updated to point to concrete local API docs instead of remaining purely conceptual.
+## When This Document Should Change
+
+Update this document when:
+
+- a crate boundary changes,
+- a public validation or fixture contract moves,
+- an API becomes concrete enough to replace a conceptual description,
+- a later phase introduces real operator or network surfaces that should no longer be described as planned.

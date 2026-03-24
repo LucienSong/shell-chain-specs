@@ -1,95 +1,108 @@
 # shell-chain
 
-> A docs-first Rust implementation repository for the Shell blockchain protocol.
-> The focus today is on making the design, interfaces, and implementation boundaries clear before code scaffolding begins.
+> A docs-first Rust repository for a natively quantum-safe smart-contract chain.
+> The project is designed from genesis around post-quantum assumptions, not as a retrofit for a legacy chain.
 
-## Current Status
+## Project Phases
 
-`shell-chain` is still primarily a documentation-and-specification repository, but it now also includes a **minimal Rust workspace bootstrap**.
-The repository has a root `Cargo.toml`, working `shell-primitives`, `shell-crypto`, `shell-state`, `shell-execution`, `shell-mempool`, `shell-consensus`, and `shell-network` crates, plus shared fixtures under `vectors/`.
-It does **not** yet provide a runnable node, a full crate tree, or a production-ready implementation of the protocol.
+### Current phase: MVP
 
-At this stage, the core implementation specs in `specs/` are all at **draft** status and are intended to be detailed enough to drive initial implementation planning, including crate scaffolding, fixture planning, and validation/interface placement.
+**Purpose**
 
-## Project Direction
+Prove the protocol end to end locally with a thin reference harness while keeping the project docs-first and PQ-native.
 
-The north star is to make `shell-chain` a docs-first Rust reference for a natively quantum-safe smart-contract chain, where spec-defined behavior becomes executable, testable crate contracts before the ecosystem is forced through a disruptive security transition.
+**What exists today**
 
-- Build toward a chain shape that can live comfortably in a post-quantum environment from the start instead of treating quantum resistance as a late compatibility patch.
-- Build the workspace in spec order: `primitives → crypto → state → mempool → execution → consensus`.
-- Keep one canonical SSZ/object model; roots and encoding logic stay centralized instead of being redefined per crate.
-- Prefer cheap-first stateless validation and fixture-backed imports before broader runtime surface area.
-- Keep unfinished protocol areas explicit and configurable until the specs settle.
-- Do not describe the repository as a runnable node until dedicated `shell-network` and `shell-cli` layers exist.
+- The docs-and-scaffold foundation that locked the protocol shape, crate boundaries, validation order, and fixture plan.
+- A real Rust workspace with `shell-cli`, `shell-fixtures`, `shell-primitives`, `shell-crypto`, `shell-state`, `shell-execution`, `shell-mempool`, `shell-consensus`, and `shell-network`.
+- Shared fixtures in both `vectors/` and `crates/shell-fixtures/`.
+- Draft implementation specs in `specs/` that still define the source of truth for boundaries and validation flow.
+- A thin `shell-cli` reference harness crate that wires the local MVP flow together without claiming operator, RPC, or runtime-node status.
 
-Current non-goals include a production node, the full planned crate tree, a frozen validator model, finalized witness encoding/compression, retrofitting legacy-account assumptions back into the core design, and premature backend, networking, or runtime work.
+**What the current MVP bootstrap proves**
 
-## Anti-Drift Rules
+- documented fixtures can drive transaction admission through `shell-mempool`,
+- witness roots and state continuity can be checked through `shell-state`,
+- planned state transitions can execute through `shell-execution`,
+- block import can complete through `shell-consensus`,
+- and the same local reference data can feed thin `shell-network` adapters that normalize typed accept/reject outcomes without introducing a real network service.
 
-- Update docs and specs before code when behavior, boundaries, or ownership move.
-- Do not add a crate, dependency, or feature flag without a local spec citation and repository-level rationale.
-- Keep placeholders labeled as provisional; they should not silently become de facto APIs.
-- Prefer native quantum-safe assumptions in authorization, validation, and execution boundaries over migration-era compatibility shortcuts.
-- Preserve cheap-first validation, centralized SSZ/root logic, and clean crate boundaries.
-- Keep peer policy and runtime concerns out of validation-oriented crates until their dedicated layers exist.
+**Still out of scope before testnet**
 
-## shell-chain in One Page
+- Do not present the repository as a runnable node, production network, or stable operator surface.
+- Do not describe `shell-cli` as a user-facing node, RPC server, daemon, or operator workflow.
+- Do not imply multi-node behavior, adversarial networking, recovery, or operational guarantees.
+- Do not freeze validator, witness-compression, or networking details that still need spec-first refinement.
+- Do not reintroduce legacy migration assumptions that weaken the native post-quantum design.
 
-The planned implementation centers on a few protocol ideas that shape every crate and API boundary:
+### Phase roadmap
 
-- **Post-quantum-first authorization**: account and validator signing paths are designed around post-quantum-capable (PQ) signature schemes instead of legacy ECDSA assumptions.
-- **Witness separation**: executable transaction envelopes stay separate from large cryptographic witness sidecars, meaning the heavier proof bundle travels alongside the core object instead of being folded into it.
-- **Dual-lane fee accounting**: normal execution pricing and witness-heavy pricing are tracked separately so expensive proof bandwidth does not hide inside one fee number.
-- **SSZ-first data model**: wire-facing objects are expected to keep canonical SSZ (SimpleSerialize) encoding and merkleization behavior.
-- **Stateless-friendly validation**: transaction admission, block import, and proof reconstruction are split into stages so light and full validation paths can share the same object model.
-- **Unified binary-tree state**: the state layer is intended to use a compressed binary-tree accumulator rather than a legacy fixed-depth sparse tree.
+| Phase | Purpose | Exit conditions | Do not do too early |
+|---|---|---|---|
+| **docs-and-scaffold** | Lock the protocol shape, crate boundaries, validation order, and fixture ownership. | Docs, specs, and workspace boundaries are coherent enough to support a local reference flow. | Avoid implying a working local reference implementation before the harness proves it. |
+| **MVP** | Prove the protocol end to end locally as a reference implementation, with `shell-cli` limited to thin local harness duties. | A local reference flow can admit transactions, validate witnesses, execute state transitions, and import blocks against documented fixtures through fixture-runner and local-wiring helpers that do not claim operator or RPC status. | Avoid treating `shell-cli` as an operator surface, RPC API, production/runtime node, or performance work that hides protocol clarity. |
+| **Testnet** | Validate the chain under adversarial networking and real operator use. | Multi-node behavior, peer policy, recovery, and operator workflows have been exercised under hostile conditions with docs that match reality. | Avoid mainnet promises, irreversible parameter freezes, or compatibility shortcuts that compromise the PQ-first design. |
+| **Mainnet** | Launch a stable production chain built around native PQ assumptions from genesis. | Releases, operator procedures, upgrade discipline, and network behavior are stable enough for production use. | Avoid treating quantum safety as an optional migration layer or expanding scope faster than the protocol can remain coherent. |
+
+## North Star and Guardrails
+
+- Keep `shell-chain` docs-first until the documented contracts are strong enough to drive implementation, fixtures, and validation.
+- Build toward a chain that is natively quantum-safe from the start rather than patched later for post-quantum compatibility.
+- Keep one canonical SSZ/object model so roots, encoding, and signing inputs do not drift across crates.
+- Prefer cheap-first stateless validation before expensive proof reconstruction, execution, or peer-policy work.
+- Keep unfinished protocol areas explicit and provisional instead of letting placeholders become accidental APIs.
+- If `shell-cli` appears in MVP-local work, keep it as boundary-clean fixture-runner and local-wiring glue rather than an operator, RPC, or runtime surface.
 
 ## Repository Layout
 
 | Path | Purpose |
 |---|---|
-| `README.md` | High-level repository overview and current status |
-| `docs/` | Reader-friendly guides for onboarding, API expectations, and contribution workflow |
-| `specs/` | Implementation specifications for data types, validation flow, testing vectors, and planned module boundaries |
+| `README.md` | High-level overview, phase model, and repository guardrails |
+| `docs/` | Onboarding, conceptual API expectations, and contribution workflow |
+| `specs/` | Implementation-facing specs for crate boundaries, data types, validation flow, and fixture planning |
+| `crates/shell-fixtures/` | Repository-local fixture helpers and shared test assets |
+| `vectors/` | Fixture files and vector material used by the specs and workspace |
 
-## Planned Workspace Shape
+## Workspace Shape
 
-The crate layout below describes the intended full architecture. Today, `shell-primitives`, `shell-crypto`, `shell-state`, `shell-execution`, `shell-mempool`, `shell-consensus`, and `shell-network` are scaffolded in the workspace, while `shell-cli` remains a placeholder:
+The current workspace already includes:
 
+- `shell-fixtures`: shared fixture helpers and test-vector support
 - `shell-primitives`: SSZ-facing types, roots, aliases, and canonical codec helpers
-- `shell-crypto`: signature dispatch, hashing boundaries, and scheme-specific verification adapters
+- `shell-crypto`: signature dispatch, hashing boundaries, and verification adapters
 - `shell-state`: state-key modeling, witness verification, and accumulator abstractions
 - `shell-execution`: execution-layer transition logic and post-state output calculation
 - `shell-mempool`: transaction admission, fee-floor checks, and cheap-first screening
 - `shell-consensus`: block-level binding, header/body checks, and import orchestration
-- `shell-network`: peer-facing propagation, fetch policy, and reputation consequences
-- `shell-cli`: operator entry points, configuration, and RPC surface
+- `shell-network`: propagation, fetch policy, and peer-consequence scaffolding
+- `shell-cli`: thin local reference-harness wiring across the workspace and fixtures
+
+Still intentionally out of scope before testnet:
+
+- a runnable node,
+- an operator binary, RPC surface, or production/runtime node,
+- finalized validator economics and witness-compression rules,
+- production networking, multi-node behavior, and operational guarantees.
 
 ## Documentation Map
 
-After this overview, continue through the repository in this order:
+Read the repository in this order:
 
-1. `docs/getting-started.md` for the onboarding path and brief terminology orientation.
-2. `docs/api-reference.md` for the planned public API surface and stability expectations.
-3. `specs/README.md` for the implementation-spec index.
+1. `docs/getting-started.md`
+2. `docs/api-reference.md`
+3. `specs/README.md`
+4. `specs/crate-structure.md`
+5. `specs/data-types.md`
+6. `specs/validation-rules.md`
+7. `specs/testing-vectors.md`
+8. `docs/contributing.md`
 
-### Recommended Spec Reading Order
+## Validation Commands
 
-From there, continue through the core specs in this order:
-
-1. `specs/crate-structure.md`
-2. `specs/data-types.md`
-3. `specs/validation-rules.md`
-4. `specs/testing-vectors.md`
-
-When you are ready to make a repository change, continue with `docs/contributing.md`.
-
-## Build and Test Status
-
-A minimal Rust workspace is now scaffolded with `shell-primitives` plus early `shell-crypto`, `shell-state`, `shell-execution`, `shell-mempool`, `shell-consensus`, and `shell-network` interfaces. The repository-local bootstrap commands are:
+The repository-local baseline commands are:
 
 - `cargo fmt --all`
 - `cargo check --workspace`
 - `cargo test --workspace`
 
-The remaining planned crate under `crates/` is `shell-cli`, which stays a directory placeholder until its crate-specific scaffolding is introduced. The documentation set in `specs/` remains the source of truth for open protocol areas and for behavior that the current bootstrap intentionally keeps abstract.
+The docs and specs remain the source of truth for what the MVP harness does prove locally and what stays out of scope until testnet.

@@ -1,0 +1,18 @@
+[package]
+name = "shell-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+shell-consensus = { path = "../shell-consensus" }
+shell-crypto = { path = "../shell-crypto" }
+shell-execution = { path = "../shell-execution" }
+shell-fixtures = { path = "../shell-fixtures" }
+shell-mempool = { path = "../shell-mempool" }
+shell-network = { path = "../shell-network" }
+shell-primitives = { path = "../shell-primitives" }
+shell-state = { path = "../shell-state" }

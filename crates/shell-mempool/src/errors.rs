@@ -1,5 +1,5 @@
 use shell_crypto::{SignatureSizeExceededError, UnsupportedSchemeError, VerificationFailure};
-use shell_primitives::{GasPrice, PrimitiveError};
+use shell_primitives::{GasPrice, PrimitiveError, ValidationOutcome};
 
 use crate::fees::FeeLane;
 
@@ -41,5 +41,18 @@ pub enum ValidationError {
 impl From<PrimitiveError> for ValidationError {
     fn from(value: PrimitiveError) -> Self {
         Self::Primitive(value)
+    }
+}
+
+impl ValidationError {
+    pub const fn network_validation_outcome(&self) -> Option<ValidationOutcome> {
+        match self {
+            Self::Primitive(error) => error.network_validation_outcome(),
+            Self::UnsupportedScheme(_)
+            | Self::SignatureSizeExceeded(_)
+            | Self::SignatureVerification(_) => Some(ValidationOutcome::Reject),
+            Self::FeeFloor(_) | Self::NoncePolicy(_) => Some(ValidationOutcome::PolicyReject),
+            Self::SigningRootUnavailable(_) | Self::AuthorizationMaterialCount(_) => None,
+        }
     }
 }

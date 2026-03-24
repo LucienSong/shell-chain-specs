@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/shell-cli",
     "crates/shell-fixtures",
     "crates/shell-primitives",
     "crates/shell-crypto",

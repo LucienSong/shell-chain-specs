@@ -1,4 +1,5 @@
 use crate::traits::VerificationPath;
+use shell_primitives::ValidationOutcome;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SignatureLimitKind {
@@ -31,4 +32,23 @@ pub enum CryptoError {
     UnsupportedScheme(UnsupportedSchemeError),
     SignatureSizeExceeded(SignatureSizeExceededError),
     VerificationFailed(VerificationFailure),
+}
+
+impl CryptoError {
+    pub const fn network_validation_outcome(&self) -> Option<ValidationOutcome> {
+        match self {
+            Self::UnsupportedScheme(_) | Self::VerificationFailed(_) => {
+                Some(ValidationOutcome::Reject)
+            }
+            Self::SignatureSizeExceeded(error) => {
+                if matches!(error.path, VerificationPath::ValidatorMessage)
+                    && matches!(error.kind, SignatureLimitKind::LocalTransportGuard)
+                {
+                    Some(ValidationOutcome::PolicyReject)
+                } else {
+                    Some(ValidationOutcome::Reject)
+                }
+            }
+        }
+    }
 }

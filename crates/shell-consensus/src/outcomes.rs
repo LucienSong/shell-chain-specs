@@ -1,7 +1,9 @@
 use shell_crypto::CryptoError;
 use shell_execution::ExecutionError;
 use shell_mempool::ValidationError;
-use shell_primitives::{DomainError, PrimitiveError, ProposerCredentialResolutionError, Root};
+use shell_primitives::{
+    DomainError, PrimitiveError, ProposerCredentialResolutionError, Root, ValidationOutcome,
+};
 use shell_state::StateError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,6 +84,30 @@ impl From<StateError> for ConsensusError {
 impl From<ProposerCredentialResolutionError> for ConsensusError {
     fn from(value: ProposerCredentialResolutionError) -> Self {
         Self::ProposerCredentialResolution(value)
+    }
+}
+
+impl ConsensusError {
+    pub const fn network_validation_outcome(&self) -> Option<ValidationOutcome> {
+        match self {
+            Self::Primitive(error) => error.network_validation_outcome(),
+            Self::Domain(_) => None,
+            Self::Crypto(error) => error.network_validation_outcome(),
+            Self::TransactionValidation(error) => error.network_validation_outcome(),
+            Self::Execution(_)
+            | Self::State(_)
+            | Self::HeaderBodyRootMismatch(_)
+            | Self::SidecarBlockRootMismatch(_)
+            | Self::SidecarCommitmentMismatch(_) => Some(ValidationOutcome::Reject),
+            Self::ProposerCredentialResolution(error) => {
+                if error.is_consensus_invalid() {
+                    Some(ValidationOutcome::Reject)
+                } else {
+                    None
+                }
+            }
+            Self::WitnessByteLimitExceeded(_) => Some(ValidationOutcome::PolicyReject),
+        }
     }
 }
 

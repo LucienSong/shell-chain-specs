@@ -1,4 +1,4 @@
-use crate::types::Root;
+use crate::{traits::ValidationOutcome, types::Root};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PrimitiveError {
@@ -68,5 +68,18 @@ pub enum ProposerCredentialResolutionError {
 impl ProposerCredentialResolutionError {
     pub const fn is_consensus_invalid(self) -> bool {
         matches!(self, Self::NotFound | Self::InvalidCredentialEncoding(_))
+    }
+}
+
+impl PrimitiveError {
+    pub const fn network_validation_outcome(&self) -> Option<ValidationOutcome> {
+        match self {
+            Self::MalformedSsz(_)
+            | Self::UnsupportedPayloadVariant(_)
+            | Self::PayloadRootMismatch(_)
+            | Self::AuthorizationCount(_)
+            | Self::SignatureSizeExceeded(_) => Some(ValidationOutcome::Reject),
+            Self::SigningRootConstruction(_) | Self::Unimplemented(_) => None,
+        }
     }
 }

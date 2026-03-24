@@ -11,6 +11,9 @@ use shell_primitives::{
     PrimitiveError, ProtocolObject, Root, StateKey, StateWitness, TransactionEnvelope,
     TransactionPayload, TransactionPayloadSsz, TxValue, U256,
 };
+use shell_state::{
+    compare_state_keys, InMemoryAccumulator, StateAccumulator, StatePatch, WitnessVerifier,
+};
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -732,6 +735,52 @@ pub struct RootCheckExpectedError {
     pub actual_root: String,
 }
 
+#[derive(Debug)]
+pub struct LoadedRootCheckScenario {
+    pub fixture: RootCheckVector,
+    pub scenario: RootCheckScenario,
+}
+
+#[derive(Debug, Clone)]
+pub struct RootCheckScenario {
+    pub header: RootCheckScenarioHeader,
+    pub sidecar: RootCheckScenarioSidecar,
+    pub transactions: Vec<TransactionEnvelope>,
+    pub witnesses: Vec<StateWitness>,
+    pub materialized_state: Vec<(StateKey, Vec<u8>)>,
+    pub pre_state_root: Root,
+    pub steps: Vec<RootCheckScenarioStep>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RootCheckScenarioHeader {
+    pub block_root: Root,
+    pub block_number: u64,
+    pub timestamp: u64,
+    pub proposer_index: u64,
+    pub parent_root: Root,
+    pub transactions_root: Root,
+    pub execution_witnesses_root: Root,
+    pub state_root: Root,
+    pub receipts_root: Root,
+    pub witness_bytes: u64,
+    pub proposer_signature: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RootCheckScenarioSidecar {
+    pub block_root: Root,
+}
+
+#[derive(Debug, Clone)]
+pub struct RootCheckScenarioStep {
+    pub transaction_root: Root,
+    pub key: StateKey,
+    pub new_leaf_value: Vec<u8>,
+    pub receipt_status_code: u8,
+    pub receipt_output: Vec<u8>,
+}
+
 pub fn validation_order_fixture_paths() -> Vec<PathBuf> {
     fixture_paths("validation-order")
 }
@@ -785,6 +834,244 @@ pub fn load_transaction_fixture_by_id(id: &str) -> TransactionVector {
 
 pub fn load_witness_fixture_by_id(id: &str) -> WitnessVector {
     load_fixture(&fixture_path_for_id("witnesses", id))
+}
+
+pub fn load_root_check_scenario(path: &Path) -> LoadedRootCheckScenario {
+    let fixture = load_fixture(path);
+    let scenario = resolve_root_check_scenario(&fixture);
+    LoadedRootCheckScenario { fixture, scenario }
+}
+
+pub fn resolve_root_check_scenario(fixture: &RootCheckVector) -> RootCheckScenario {
+    let transactions = fixture
+        .input
+        .body
+        .transaction_vector_ids
+        .iter()
+        .map(|id| {
+            let vector = load_transaction_fixture_by_id(id);
+            assert_eq!(
+                vector.expected_outcome, "accept",
+                "{} references non-accept transaction fixture {}",
+                fixture.id, id
+            );
+            vector.envelope()
+        })
+        .collect::<Vec<_>>();
+    let expected_transactions_root = parse_root(&fixture.transactions_root);
+    let computed_transactions_root =
+        compute_transactions_root(&transactions).unwrap_or_else(|err| {
+            panic!(
+                "{} failed to compute transactions_root: {err:?}",
+                fixture.id
+            )
+        });
+    assert_eq!(
+        computed_transactions_root, expected_transactions_root,
+        "{} computed transactions_root drifted from the fixture root",
+        fixture.id
+    );
+    assert_eq!(
+        parse_root(&fixture.input.header.transactions_root),
+        expected_transactions_root,
+        "{} header transactions_root drifted from the fixture root",
+        fixture.id
+    );
+
+    let witness_vectors = fixture
+        .input
+        .sidecar
+        .witness_vector_ids
+        .iter()
+        .map(|id| {
+            let vector = load_witness_fixture_by_id(id);
+            assert_eq!(
+                vector.expected_outcome, "accept",
+                "{} references non-accept witness fixture {}",
+                fixture.id, id
+            );
+            vector
+        })
+        .collect::<Vec<_>>();
+    let witnesses = witness_vectors
+        .iter()
+        .map(|vector| {
+            vector.witness().unwrap_or_else(|| {
+                panic!(
+                    "{} witness fixture must contain a single witness",
+                    vector.id
+                )
+            })
+        })
+        .collect::<Vec<_>>();
+    let expected_witnesses_root = parse_root(&fixture.execution_witnesses_root);
+    let computed_witnesses_root = compute_execution_witnesses_root(&witnesses);
+    assert_eq!(
+        computed_witnesses_root, expected_witnesses_root,
+        "{} computed execution_witnesses_root drifted from the fixture root",
+        fixture.id
+    );
+    assert_eq!(
+        parse_root(&fixture.input.header.execution_witnesses_root),
+        expected_witnesses_root,
+        "{} header execution_witnesses_root drifted from the fixture root",
+        fixture.id
+    );
+
+    let base_materialized = canonical_root_check_materialized_state(
+        &fixture.id,
+        &witness_vectors
+            .first()
+            .unwrap_or_else(|| panic!("{} must reference at least one witness fixture", fixture.id))
+            .materialized_state(),
+    );
+    let pre_state_root = witness_vectors
+        .first()
+        .and_then(|vector| vector.expected_state_root())
+        .unwrap_or_else(|| {
+            panic!(
+                "{} witness fixture must declare expected_state_root",
+                fixture.id
+            )
+        });
+    let witness_accumulator = materialize_root_check_accumulator(&base_materialized, &fixture.id);
+    assert_eq!(
+        witness_accumulator.state_root(),
+        pre_state_root,
+        "{} witness pre-state root drifted from the witness fixtures",
+        fixture.id
+    );
+    witness_accumulator
+        .verify_witnesses(&witnesses, &pre_state_root)
+        .unwrap_or_else(|err| panic!("{} witness verification failed: {err:?}", fixture.id));
+
+    for vector in witness_vectors.iter().skip(1) {
+        assert_eq!(
+            vector.expected_state_root(),
+            Some(pre_state_root),
+            "{} witness fixtures must agree on expected_state_root",
+            fixture.id
+        );
+        assert_eq!(
+            canonical_root_check_materialized_state(&fixture.id, &vector.materialized_state()),
+            base_materialized,
+            "{} witness fixtures must agree on materialized_state",
+            fixture.id
+        );
+    }
+
+    let steps = fixture
+        .input
+        .execution
+        .steps
+        .iter()
+        .zip(fixture.input.body.transaction_vector_ids.iter())
+        .zip(transactions.iter())
+        .map(|((step, transaction_id), transaction)| {
+            assert_eq!(
+                &step.transaction_vector_id, transaction_id,
+                "{} execution steps must stay aligned with body.transaction_vector_ids",
+                fixture.id
+            );
+            let witness = witness_vectors
+                .iter()
+                .find(|vector| vector.id == step.witness_vector_id)
+                .and_then(|vector| vector.witness())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{} execution step references missing witness fixture {}",
+                        fixture.id, step.witness_vector_id
+                    )
+                });
+            let transaction_root = transaction
+                .canonical_root()
+                .unwrap_or_else(|err| panic!("{} transaction root failed: {err:?}", fixture.id));
+
+            RootCheckScenarioStep {
+                transaction_root,
+                key: witness.key,
+                new_leaf_value: parse_hex(&step.new_leaf_value_hex),
+                receipt_status_code: step.receipt_status_code,
+                receipt_output: parse_hex(&step.receipt_output_hex),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        steps.len(),
+        transactions.len(),
+        "{} execution steps must cover each transaction exactly once",
+        fixture.id
+    );
+
+    let expected_state_root = parse_root(&fixture.state_root);
+    let expected_receipts_root = parse_root(&fixture.receipts_root);
+    assert_eq!(
+        parse_root(&fixture.input.header.state_root),
+        expected_state_root,
+        "{} header state_root drifted from the fixture root",
+        fixture.id
+    );
+    assert_eq!(
+        parse_root(&fixture.input.header.receipts_root),
+        expected_receipts_root,
+        "{} header receipts_root drifted from the fixture root",
+        fixture.id
+    );
+
+    let expected_block_root = parse_root(&fixture.input.header.block_root);
+    assert_eq!(
+        parse_root(&fixture.input.sidecar.block_root),
+        expected_block_root,
+        "{} sidecar block_root drifted from the header root",
+        fixture.id
+    );
+
+    RootCheckScenario {
+        header: RootCheckScenarioHeader {
+            block_root: expected_block_root,
+            block_number: fixture.input.header.block_number,
+            timestamp: fixture.input.header.timestamp,
+            proposer_index: fixture.input.header.proposer_index,
+            parent_root: parse_root(&fixture.input.header.parent_root),
+            transactions_root: expected_transactions_root,
+            execution_witnesses_root: expected_witnesses_root,
+            state_root: expected_state_root,
+            receipts_root: expected_receipts_root,
+            witness_bytes: fixture.input.header.witness_bytes,
+            proposer_signature: parse_hex(&fixture.input.header.proposer_signature_hex),
+        },
+        sidecar: RootCheckScenarioSidecar {
+            block_root: expected_block_root,
+        },
+        transactions,
+        witnesses,
+        materialized_state: base_materialized,
+        pre_state_root,
+        steps,
+    }
+}
+
+pub fn materialize_root_check_accumulator(
+    materialized_state: &[(StateKey, Vec<u8>)],
+    fixture_id: &str,
+) -> InMemoryAccumulator {
+    let mut accumulator = InMemoryAccumulator::new();
+    accumulator
+        .apply_transition(&StatePatch {
+            accesses: materialized_state
+                .iter()
+                .map(|(key, _)| key.clone())
+                .collect(),
+            new_values: materialized_state
+                .iter()
+                .map(|(_, value)| value.clone())
+                .collect(),
+        })
+        .unwrap_or_else(|err| {
+            panic!("{fixture_id} failed to materialize reference state: {err:?}")
+        });
+    accumulator
 }
 
 pub fn compute_transactions_root(
@@ -862,6 +1149,20 @@ fn fixture_path_for_id(category: &str, id: &str) -> PathBuf {
         .join(format!("{id}.json"))
 }
 
+fn canonical_root_check_materialized_state(
+    fixture_id: &str,
+    materialized_state: &[(StateKey, Vec<u8>)],
+) -> Vec<(StateKey, Vec<u8>)> {
+    let mut canonical = materialized_state.to_vec();
+    canonical.sort_by(|left, right| compare_state_keys(&left.0, &right.0));
+    assert!(
+        !canonical.is_empty(),
+        "{} must materialize at least one pre-state leaf",
+        fixture_id
+    );
+    canonical
+}
+
 fn build_payload(input: &TransactionPayloadInput) -> TransactionPayloadSsz {
     match input {
         TransactionPayloadInput::Basic {
@@ -917,6 +1218,59 @@ fn parse_bytes_32(value: &str) -> [u8; 32] {
     bytes
         .try_into()
         .unwrap_or_else(|_| panic!("expected 32-byte hex string, got {len} bytes in {value}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{load_root_check_scenario, root_check_fixture_paths};
+
+    #[test]
+    fn shared_root_check_loader_materializes_canonical_scenarios() {
+        let mut paths = root_check_fixture_paths();
+        paths.sort();
+
+        assert!(
+            !paths.is_empty(),
+            "expected at least one root-check fixture under vectors/root-checks"
+        );
+
+        for path in paths {
+            let loaded = load_root_check_scenario(&path);
+            let fixture = &loaded.fixture;
+            let scenario = &loaded.scenario;
+
+            assert_eq!(
+                scenario.header.transactions_root,
+                super::parse_root(&fixture.transactions_root),
+                "{} transactions_root drifted during shared loading",
+                fixture.id
+            );
+            assert_eq!(
+                scenario.header.execution_witnesses_root,
+                super::parse_root(&fixture.execution_witnesses_root),
+                "{} execution_witnesses_root drifted during shared loading",
+                fixture.id
+            );
+            assert_eq!(
+                scenario.header.state_root,
+                super::parse_root(&fixture.state_root),
+                "{} state_root drifted during shared loading",
+                fixture.id
+            );
+            assert_eq!(
+                scenario.header.receipts_root,
+                super::parse_root(&fixture.receipts_root),
+                "{} receipts_root drifted during shared loading",
+                fixture.id
+            );
+            assert_eq!(
+                scenario.steps.len(),
+                scenario.transactions.len(),
+                "{} shared loader must keep execution steps aligned",
+                fixture.id
+            );
+        }
+    }
 }
 
 fn parse_bytes_31(value: &str) -> [u8; 31] {

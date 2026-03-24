@@ -251,6 +251,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "shell-cli"
+version = "0.1.0"
+dependencies = [
+ "shell-consensus",
+ "shell-crypto",
+ "shell-execution",
+ "shell-fixtures",
+ "shell-mempool",
+ "shell-network",
+ "shell-primitives",
+ "shell-state",
+]
+
+[[package]]
 name = "shell-consensus"
 version = "0.1.0"
 dependencies = [
@@ -293,6 +307,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "shell-primitives",
+ "shell-state",
 ]
 
 [[package]]

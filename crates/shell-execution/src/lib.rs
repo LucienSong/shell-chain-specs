@@ -6,6 +6,7 @@ extern crate alloc;
 pub mod engine;
 pub mod errors;
 pub mod outputs;
+pub mod planned;
 pub mod state_view;
 
 pub use crate::engine::{StatelessBlockExecutor, TransactionExecutionPlan, TransactionExecutor};
@@ -14,12 +15,14 @@ pub use crate::outputs::{
     compute_receipts_root, BlockExecutionOutcome, CommittedExecutionRoots, ExecutionReceipt,
     TransactionExecutionOutcome,
 };
+pub use crate::planned::{PlannedTransaction, PlannedTransactionExecutor};
 pub use crate::state_view::ExecutionStateView;
 
 #[cfg(test)]
 mod tests {
     use alloc::boxed::Box;
     use alloc::vec;
+    use alloc::vec::Vec;
 
     use sha2::{Digest, Sha256};
 
@@ -201,6 +204,119 @@ mod tests {
                 expected: [0xFF; 32],
                 actual: outcome.post_state_root,
             }
+        );
+    }
+
+    #[test]
+    fn planned_executor_replays_documented_scenarios_deterministically() {
+        let executor = StatelessBlockExecutor::new();
+        let applier = StubStateTransitionApplier;
+        let transactions = [sample_transaction(3), sample_transaction(4)];
+        let planned_transactions = transactions
+            .iter()
+            .map(|transaction| {
+                let transaction_root = transaction
+                    .canonical_root()
+                    .expect("sample transaction must hash");
+                PlannedTransaction {
+                    transaction_root,
+                    plan: TransactionExecutionPlan {
+                        state_patch: StatePatch {
+                            accesses: vec![StateKey::RawTreeKey(transaction_root)],
+                            new_values: vec![vec![transaction_root[0], transaction_root[1]]],
+                        },
+                        receipt: ExecutionReceipt {
+                            status_code: 7,
+                            output: vec![transaction_root[2], transaction_root[3]],
+                        },
+                    },
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let first_planner = PlannedTransactionExecutor::new(planned_transactions.clone());
+        let second_planner = PlannedTransactionExecutor::new(planned_transactions);
+        let first = executor
+            .execute_block(&[9; 32], &transactions, &first_planner, &applier)
+            .expect("planned execution should succeed");
+        let second = executor
+            .execute_block(&[9; 32], &transactions, &second_planner, &applier)
+            .expect("same planned scenario should stay deterministic");
+
+        assert_eq!(first, second);
+        assert!(first_planner.is_exhausted());
+        assert!(second_planner.is_exhausted());
+    }
+
+    #[test]
+    fn planned_executor_rejects_out_of_order_transactions() {
+        let executor = StatelessBlockExecutor::new();
+        let applier = StubStateTransitionApplier;
+        let first = sample_transaction(11);
+        let second = sample_transaction(12);
+        let planner = PlannedTransactionExecutor::new(vec![
+            PlannedTransaction::from_transaction(
+                &first,
+                TransactionExecutionPlan {
+                    state_patch: StatePatch {
+                        accesses: vec![StateKey::RawTreeKey([1; 32])],
+                        new_values: vec![vec![1]],
+                    },
+                    receipt: ExecutionReceipt {
+                        status_code: 1,
+                        output: vec![1],
+                    },
+                },
+            )
+            .expect("first sample transaction should hash"),
+            PlannedTransaction::from_transaction(
+                &second,
+                TransactionExecutionPlan {
+                    state_patch: StatePatch {
+                        accesses: vec![StateKey::RawTreeKey([2; 32])],
+                        new_values: vec![vec![2]],
+                    },
+                    receipt: ExecutionReceipt {
+                        status_code: 1,
+                        output: vec![2],
+                    },
+                },
+            )
+            .expect("second sample transaction should hash"),
+        ]);
+
+        let err = executor
+            .execute_block(&[0; 32], &[second, first], &planner, &applier)
+            .expect_err("out-of-order transactions must fail");
+
+        assert_eq!(
+            err,
+            ExecutionError::Executor("planned transaction root mismatch")
+        );
+    }
+
+    #[test]
+    fn planned_executor_reports_unconsumed_steps() {
+        let planner = PlannedTransactionExecutor::new(vec![PlannedTransaction::from_transaction(
+            &sample_transaction(21),
+            TransactionExecutionPlan {
+                state_patch: StatePatch {
+                    accesses: vec![StateKey::RawTreeKey([3; 32])],
+                    new_values: vec![vec![3]],
+                },
+                receipt: ExecutionReceipt {
+                    status_code: 1,
+                    output: vec![3],
+                },
+            },
+        )
+        .expect("sample transaction should hash")]);
+
+        assert_eq!(
+            planner.ensure_exhausted(),
+            Err(ExecutionError::Executor(
+                "unconsumed planned transaction steps"
+            ))
         );
     }
 }

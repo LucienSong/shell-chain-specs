@@ -1,9 +1,9 @@
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 
 use shell_consensus::{
     BlockExecutionEngine, BlockImportConfig, BlockImportPipeline, BlockImportServices,
-    CanonicalBlockBody, CanonicalBlockHeader, CanonicalBlockSidecar, ConsensusBody,
-    ConsensusError, ConsensusHeader, ConsensusSidecar, TransactionRevalidator, WitnessPreparer,
+    CanonicalBlockBody, CanonicalBlockHeader, CanonicalBlockSidecar, ConsensusBody, ConsensusError,
+    ConsensusHeader, ConsensusSidecar, TransactionRevalidator, WitnessPreparer,
 };
 use shell_crypto::{
     CryptoError, SignatureDispatcher, SignatureVerificationRequest, SignatureVerifier,
@@ -14,36 +14,16 @@ use shell_execution::{
     TransactionExecutionPlan, TransactionExecutor,
 };
 use shell_fixtures::{
-    compute_execution_witnesses_root, compute_transactions_root, load_fixture,
-    load_transaction_fixture_by_id, load_witness_fixture_by_id, parse_hex, parse_root,
-    root_check_fixture_paths, RootCheckExpectedError, RootCheckVector,
+    load_root_check_scenario, materialize_root_check_accumulator, parse_root,
+    root_check_fixture_paths, RootCheckExpectedError, RootCheckScenario, RootCheckScenarioStep,
+    RootCheckVector,
 };
 use shell_mempool::{MultiAuthorizationPolicy, ValidationError};
 use shell_primitives::{
     ProposerCredential, ProposerCredentialQuery, ProposerCredentialResolutionError,
     ProposerCredentialResolver, ProtocolObject, Root, StateKey, StateWitness, TransactionEnvelope,
 };
-use shell_state::{
-    compare_state_keys, InMemoryAccumulator, StateAccumulator, StatePatch, StateTransitionApplier,
-    StateTransitionOutcome, WitnessVerifier,
-};
-
-#[derive(Clone)]
-struct ResolvedStep {
-    transaction_root: Root,
-    key: StateKey,
-    new_leaf_value: Vec<u8>,
-    receipt_status_code: u8,
-    receipt_output: Vec<u8>,
-}
-
-struct ResolvedRootCheck {
-    block: CanonicalBlock,
-    witnesses: Vec<StateWitness>,
-    materialized_state: Vec<(StateKey, Vec<u8>)>,
-    pre_state_root: Root,
-    steps: Vec<ResolvedStep>,
-}
+use shell_state::{ReferenceStateApplier, StatePatch, WitnessVerifier};
 
 struct CanonicalBlock {
     header: CanonicalBlockHeader,
@@ -157,8 +137,10 @@ impl WitnessPreparer for FixtureWitnessPreparer {
         _sidecar: &dyn ConsensusSidecar,
     ) -> Result<(), shell_state::StateError> {
         self.calls.set(self.calls.get() + 1);
-        let accumulator =
-            materialize_accumulator(&self.materialized_state, "root-check witness preparation");
+        let accumulator = materialize_root_check_accumulator(
+            &self.materialized_state,
+            "root-check witness preparation",
+        );
         accumulator.verify_witnesses(&self.witnesses, &self.pre_state_root)
     }
 }
@@ -166,7 +148,7 @@ impl WitnessPreparer for FixtureWitnessPreparer {
 struct FixtureExecutionEngine {
     materialized_state: Vec<(StateKey, Vec<u8>)>,
     pre_state_root: Root,
-    steps: Vec<ResolvedStep>,
+    steps: Vec<RootCheckScenarioStep>,
     calls: Cell<usize>,
 }
 
@@ -190,19 +172,22 @@ impl BlockExecutionEngine for FixtureExecutionEngine {
             steps: self.steps.clone(),
             cursor: Cell::new(0),
         };
-        let applier = FixtureStateTransitionApplier {
-            accumulator: RefCell::new(materialize_accumulator(
-                &self.materialized_state,
-                "root-check execution",
-            )),
-        };
+        let applier = ReferenceStateApplier::new(materialize_root_check_accumulator(
+            &self.materialized_state,
+            "root-check execution",
+        ));
 
-        executor.execute_block(&self.pre_state_root, body.transactions(), &planner, &applier)
+        executor.execute_block(
+            &self.pre_state_root,
+            body.transactions(),
+            &planner,
+            &applier,
+        )
     }
 }
 
 struct FixtureTransactionExecutor {
-    steps: Vec<ResolvedStep>,
+    steps: Vec<RootCheckScenarioStep>,
     cursor: Cell<usize>,
 }
 
@@ -239,27 +224,6 @@ impl TransactionExecutor for FixtureTransactionExecutor {
     }
 }
 
-struct FixtureStateTransitionApplier {
-    accumulator: RefCell<InMemoryAccumulator>,
-}
-
-impl StateTransitionApplier for FixtureStateTransitionApplier {
-    fn apply_transition(
-        &self,
-        pre_state_root: &Root,
-        patch: &StatePatch,
-    ) -> Result<StateTransitionOutcome, shell_state::StateError> {
-        let mut accumulator = self.accumulator.borrow_mut();
-        assert_eq!(
-            accumulator.state_root(),
-            *pre_state_root,
-            "execution pre_state_root drifted from the fixture accumulator"
-        );
-        let post_state_root = accumulator.apply_transition(patch)?;
-        Ok(StateTransitionOutcome { post_state_root })
-    }
-}
-
 #[test]
 fn root_check_vectors_cover_consensus_execution_comparison_end_to_end() {
     let mut paths = root_check_fixture_paths();
@@ -271,8 +235,10 @@ fn root_check_vectors_cover_consensus_execution_comparison_end_to_end() {
     );
 
     for path in paths {
-        let fixture: RootCheckVector = load_fixture(&path);
-        let resolved = resolve_fixture(&fixture);
+        let loaded = load_root_check_scenario(&path);
+        let fixture: RootCheckVector = loaded.fixture;
+        let resolved = loaded.scenario;
+        let block = canonical_block_from_scenario(&resolved);
         let pipeline = BlockImportPipeline::new(BlockImportConfig::default());
         let resolver = CountingResolver {
             calls: Cell::new(0),
@@ -313,9 +279,9 @@ fn root_check_vectors_cover_consensus_execution_comparison_end_to_end() {
         );
 
         let result = pipeline.import_block(
-            &resolved.block.header,
-            &resolved.block.body,
-            &resolved.block.sidecar,
+            &block.header,
+            &block.body,
+            &block.sidecar,
             BlockImportServices {
                 resolver: &resolver,
                 dispatcher: &dispatcher,
@@ -329,9 +295,9 @@ fn root_check_vectors_cover_consensus_execution_comparison_end_to_end() {
             "accept" => {
                 let outcome = result
                     .unwrap_or_else(|err| panic!("{} should accept but got {err:?}", fixture.id));
-                assert_eq!(outcome.block_root, resolved.block.header.block_root);
-                assert_eq!(outcome.post_state_root, resolved.block.header.state_root);
-                assert_eq!(outcome.receipts_root, resolved.block.header.receipts_root);
+                assert_eq!(outcome.block_root, block.header.block_root);
+                assert_eq!(outcome.post_state_root, block.header.state_root);
+                assert_eq!(outcome.receipts_root, block.header.receipts_root);
             }
             "reject" => {
                 let expected = fixture
@@ -353,7 +319,7 @@ fn root_check_vectors_cover_consensus_execution_comparison_end_to_end() {
         );
         assert_eq!(
             revalidator.calls(),
-            resolved.block.body.transactions.len(),
+            block.body.transactions.len(),
             "{} transaction revalidations drifted",
             fixture.id
         );
@@ -363,222 +329,40 @@ fn root_check_vectors_cover_consensus_execution_comparison_end_to_end() {
             "{} witness preparation count drifted",
             fixture.id
         );
-        assert_eq!(engine.calls(), 1, "{} execution call count drifted", fixture.id);
+        assert_eq!(
+            engine.calls(),
+            1,
+            "{} execution call count drifted",
+            fixture.id
+        );
     }
 }
 
-fn resolve_fixture(fixture: &RootCheckVector) -> ResolvedRootCheck {
-    let transaction_ids = &fixture.input.body.transaction_vector_ids;
-    let transactions = transaction_ids
-        .iter()
-        .map(|id| {
-            let vector = load_transaction_fixture_by_id(id);
-            assert_eq!(
-                vector.expected_outcome, "accept",
-                "{} references non-accept transaction fixture {}",
-                fixture.id, id
-            );
-            vector.envelope()
-        })
-        .collect::<Vec<_>>();
-    let computed_transactions_root = compute_transactions_root(&transactions)
-        .unwrap_or_else(|err| panic!("{} failed to compute transactions_root: {err:?}", fixture.id));
-    let expected_transactions_root = parse_root(&fixture.transactions_root);
-    assert_eq!(
-        computed_transactions_root, expected_transactions_root,
-        "{} computed transactions_root drifted from the fixture root",
-        fixture.id
-    );
-    assert_eq!(
-        parse_root(&fixture.input.header.transactions_root),
-        expected_transactions_root,
-        "{} header transactions_root drifted from the fixture root",
-        fixture.id
-    );
-
-    let witness_vectors = fixture
-        .input
-        .sidecar
-        .witness_vector_ids
-        .iter()
-        .map(|id| {
-            let vector = load_witness_fixture_by_id(id);
-            assert_eq!(
-                vector.expected_outcome, "accept",
-                "{} references non-accept witness fixture {}",
-                fixture.id, id
-            );
-            vector
-        })
-        .collect::<Vec<_>>();
-    let witnesses = witness_vectors
-        .iter()
-        .map(|vector| {
-            vector
-                .witness()
-                .unwrap_or_else(|| panic!("{} witness fixture must contain a single witness", vector.id))
-        })
-        .collect::<Vec<_>>();
-    let computed_witnesses_root = compute_execution_witnesses_root(&witnesses);
-    let expected_witnesses_root = parse_root(&fixture.execution_witnesses_root);
-    assert_eq!(
-        computed_witnesses_root, expected_witnesses_root,
-        "{} computed execution_witnesses_root drifted from the fixture root",
-        fixture.id
-    );
-    assert_eq!(
-        parse_root(&fixture.input.header.execution_witnesses_root),
-        expected_witnesses_root,
-        "{} header execution_witnesses_root drifted from the fixture root",
-        fixture.id
-    );
-
-    let base_materialized = canonical_materialized_state(
-        &fixture.id,
-        &witness_vectors
-            .first()
-            .unwrap_or_else(|| panic!("{} must reference at least one witness fixture", fixture.id))
-            .materialized_state(),
-    );
-    let pre_state_root = witness_vectors
-        .first()
-        .and_then(|vector| vector.expected_state_root())
-        .unwrap_or_else(|| panic!("{} witness fixture must declare expected_state_root", fixture.id));
-    let witness_accumulator = materialize_accumulator(&base_materialized, &fixture.id);
-    assert_eq!(
-        witness_accumulator.state_root(),
-        pre_state_root,
-        "{} witness pre-state root drifted from the witness fixtures",
-        fixture.id
-    );
-    witness_accumulator
-        .verify_witnesses(&witnesses, &pre_state_root)
-        .unwrap_or_else(|err| panic!("{} witness verification failed: {err:?}", fixture.id));
-
-    for vector in witness_vectors.iter().skip(1) {
-        assert_eq!(
-            vector.expected_state_root(),
-            Some(pre_state_root),
-            "{} witness fixtures must agree on expected_state_root",
-            fixture.id
-        );
-        assert_eq!(
-            canonical_materialized_state(&fixture.id, &vector.materialized_state()),
-            base_materialized,
-            "{} witness fixtures must agree on materialized_state",
-            fixture.id
-        );
-    }
-
-    let steps = fixture
-        .input
-        .execution
-        .steps
-        .iter()
-        .zip(transaction_ids.iter())
-        .zip(transactions.iter())
-        .map(|((step, transaction_id), transaction)| {
-            assert_eq!(
-                &step.transaction_vector_id, transaction_id,
-                "{} execution steps must stay aligned with body.transaction_vector_ids",
-                fixture.id
-            );
-            let witness = witness_vectors
-                .iter()
-                .find(|vector| vector.id == step.witness_vector_id)
-                .and_then(|vector| vector.witness())
-                .unwrap_or_else(|| {
-                    panic!(
-                        "{} execution step references missing witness fixture {}",
-                        fixture.id, step.witness_vector_id
-                    )
-                });
-            let transaction_root = transaction
-                .canonical_root()
-                .unwrap_or_else(|err| panic!("{} transaction root failed: {err:?}", fixture.id));
-
-            ResolvedStep {
-                transaction_root,
-                key: witness.key,
-                new_leaf_value: parse_hex(&step.new_leaf_value_hex),
-                receipt_status_code: step.receipt_status_code,
-                receipt_output: parse_hex(&step.receipt_output_hex),
-            }
-        })
-        .collect::<Vec<_>>();
-
-    assert_eq!(
-        steps.len(),
-        transactions.len(),
-        "{} execution steps must cover each transaction exactly once",
-        fixture.id
-    );
-
-    let header = CanonicalBlockHeader {
-        block_root: parse_root(&fixture.input.header.block_root),
-        block_number: fixture.input.header.block_number,
-        timestamp: fixture.input.header.timestamp,
-        parent_root: parse_root(&fixture.input.header.parent_root),
-        witness_bytes: fixture.input.header.witness_bytes,
-        transactions_root: expected_transactions_root,
-        execution_witnesses_root: expected_witnesses_root,
-        state_root: parse_root(&fixture.input.header.state_root),
-        receipts_root: parse_root(&fixture.input.header.receipts_root),
-        proposer_signature: parse_hex(&fixture.input.header.proposer_signature_hex),
-        proposer_index_hint: Some(fixture.input.header.proposer_index),
-    };
-    let body = CanonicalBlockBody {
-        transactions,
-        transactions_root: expected_transactions_root,
-    };
-    let sidecar = CanonicalBlockSidecar {
-        block_root: parse_root(&fixture.input.sidecar.block_root),
-        execution_witnesses_root: expected_witnesses_root,
-        witnesses: witnesses.clone(),
-    };
-
-    ResolvedRootCheck {
-        block: CanonicalBlock {
-            header,
-            body,
-            sidecar,
+fn canonical_block_from_scenario(resolved: &RootCheckScenario) -> CanonicalBlock {
+    CanonicalBlock {
+        header: CanonicalBlockHeader {
+            block_root: resolved.header.block_root,
+            block_number: resolved.header.block_number,
+            timestamp: resolved.header.timestamp,
+            parent_root: resolved.header.parent_root,
+            witness_bytes: resolved.header.witness_bytes,
+            transactions_root: resolved.header.transactions_root,
+            execution_witnesses_root: resolved.header.execution_witnesses_root,
+            state_root: resolved.header.state_root,
+            receipts_root: resolved.header.receipts_root,
+            proposer_signature: resolved.header.proposer_signature.clone(),
+            proposer_index_hint: Some(resolved.header.proposer_index),
         },
-        witnesses,
-        materialized_state: base_materialized,
-        pre_state_root,
-        steps,
+        body: CanonicalBlockBody {
+            transactions: resolved.transactions.clone(),
+            transactions_root: resolved.header.transactions_root,
+        },
+        sidecar: CanonicalBlockSidecar {
+            block_root: resolved.sidecar.block_root,
+            execution_witnesses_root: resolved.header.execution_witnesses_root,
+            witnesses: resolved.witnesses.clone(),
+        },
     }
-}
-
-fn canonical_materialized_state(
-    fixture_id: &str,
-    materialized_state: &[(StateKey, Vec<u8>)],
-) -> Vec<(StateKey, Vec<u8>)> {
-    let mut canonical = materialized_state.to_vec();
-    canonical.sort_by(|left, right| compare_state_keys(&left.0, &right.0));
-    assert!(
-        !canonical.is_empty(),
-        "{} must materialize at least one pre-state leaf",
-        fixture_id
-    );
-    canonical
-}
-
-fn materialize_accumulator(
-    materialized_state: &[(StateKey, Vec<u8>)],
-    fixture_id: &str,
-) -> InMemoryAccumulator {
-    let mut accumulator = InMemoryAccumulator::new();
-    accumulator
-        .apply_transition(&StatePatch {
-            accesses: materialized_state.iter().map(|(key, _)| key.clone()).collect(),
-            new_values: materialized_state
-                .iter()
-                .map(|(_, value)| value.clone())
-                .collect(),
-        })
-        .unwrap_or_else(|err| panic!("{fixture_id} failed to materialize reference state: {err:?}"));
-    accumulator
 }
 
 fn assert_consensus_error(

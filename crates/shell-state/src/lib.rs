@@ -6,6 +6,7 @@ extern crate alloc;
 pub mod accumulator;
 pub mod errors;
 pub mod keys;
+pub mod reference_applier;
 pub mod transition;
 pub mod views;
 pub mod witness;
@@ -13,10 +14,11 @@ pub mod witness;
 pub use crate::accumulator::{
     InMemoryAccumulator, ReferenceProofLeaf, ReferenceProofPath, StateAccumulator,
 };
-pub use crate::errors::{StateError, WitnessOrderingError};
+pub use crate::errors::{RootContinuityError, StateError, WitnessOrderingError};
 pub use crate::keys::{
     canonicalize_execution_address, compare_state_keys, encode_state_key, StateKeyBytes,
 };
+pub use crate::reference_applier::ReferenceStateApplier;
 pub use crate::transition::{StatePatch, StateTransitionApplier, StateTransitionOutcome};
 pub use crate::views::{MetadataAdapter, ReadOnlyStateView};
 pub use crate::witness::{

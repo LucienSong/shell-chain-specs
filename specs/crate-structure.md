@@ -6,7 +6,7 @@
 
 ## Status
 
-Draft, but detailed enough to drive initial crate scaffolding and interface placement.
+Draft, but detailed enough to drive the current workspace and constrain MVP-local harness wiring.
 
 ## 1. Goals
 
@@ -16,7 +16,7 @@ The workspace layout must support four constraints at the same time:
    - Core protocol objects, roots, and lightweight validation helpers must remain available without dragging in networking, execution, or node-runtime code.
 
 2. **Protocol-shape fidelity**
-   - Crate boundaries should follow the repository's local protocol model: wire objects, cryptographic dispatch, witness/state verification, execution, block orchestration, networking, and operator entry points.
+   - Crate boundaries should follow the repository's local protocol model: wire objects, cryptographic dispatch, witness/state verification, execution, block orchestration, networking, and later operator entry points.
 
 3. **Replaceable implementations behind stable interfaces**
    - PQ signature libraries, accumulator internals, and runtime/networking backends may change, but higher-level crates should not need invasive rewrites when they do.
@@ -49,7 +49,8 @@ shell-chain/
 Notes:
 
 - `vectors/` is not a crate. It is the planned repository-local home for canonical fixtures referenced by `specs/testing-vectors.md`.
-- The first scaffold does not need to implement every module fully, but the crate names and their ownership boundaries should match this document from the start.
+- The crate graph does not need to implement every module fully, but the crate names and their ownership boundaries should match this document from the start.
+- `shell-cli` now exists as a thin local reference harness crate; that does not change its out-of-scope status for operator, RPC, or daemon concerns before testnet.
 
 ## 3. Crate Ownership
 
@@ -186,12 +187,13 @@ Must not own:
 
 ### 3.8 `shell-cli`
 
-Owns operator entry points:
+Owns thin local reference-harness composition only:
 
-- configuration loading,
-- runtime wiring across crates,
-- RPC server and administrative commands,
-- node startup, shutdown, and local service composition.
+- repository-local runtime wiring across crates,
+- fixture/scenario-driven local reference flows,
+- test-oriented helpers that admit transactions, prepare witnesses, execute plans, apply state, and import blocks,
+- thin local adapters that reuse the same reference flow for typed validation outcomes,
+- no operator, RPC, or daemon lifecycle surface in the MVP-local boundary.
 
 `shell-cli` is expected to be the highest-level crate and may depend on all runtime crates that it wires together.
 
