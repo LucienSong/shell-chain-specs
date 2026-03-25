@@ -1,0 +1,70 @@
+{
+  "id": "witness-order-canonical-002",
+  "category": "witness",
+  "rule": "canonical_state_key_ordering",
+  "description": "A witness list that walks the current AccountHeader, StorageSlot, CodeChunk, RawTreeKey, and Stem tag boundaries in canonical byte order is accepted before any proof reconstruction.",
+  "input": {
+    "ordering_is_canonical": true,
+    "proof_shape_kind": "reference_empty",
+    "witnesses": [
+      {
+        "key": {
+          "kind": "account_header",
+          "address": "0x1111111111111111111111111111111111111111",
+          "canonical_key_hex": "0x000000000000000000000000001111111111111111111111111111111111111111"
+        },
+        "leaf_value_hex": "0x01",
+        "proof_hex": []
+      },
+      {
+        "key": {
+          "kind": "storage_slot",
+          "address": "0x1111111111111111111111111111111111111111",
+          "slot": "0x2222222222222222222222222222222222222222222222222222222222222222",
+          "canonical_key_hex": "0x0100000000000000000000000011111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222"
+        },
+        "leaf_value_hex": "0x0203",
+        "proof_hex": []
+      },
+      {
+        "key": {
+          "kind": "code_chunk",
+          "address": "0x3333333333333333333333333333333333333333",
+          "chunk_index": 7,
+          "canonical_key_hex": "0x02000000000000000000000000333333333333333333333333333333333333333300000007"
+        },
+        "leaf_value_hex": "0x04",
+        "proof_hex": []
+      },
+      {
+        "key": {
+          "kind": "raw_tree_key",
+          "raw_key": "0x4444444444444444444444444444444444444444444444444444444444444444",
+          "canonical_key_hex": "0x034444444444444444444444444444444444444444444444444444444444444444"
+        },
+        "leaf_value_hex": "0x050607",
+        "proof_hex": []
+      },
+      {
+        "key": {
+          "kind": "stem",
+          "stem": "0x55555555555555555555555555555555555555555555555555555555555555",
+          "canonical_key_hex": "0x0455555555555555555555555555555555555555555555555555555555555555"
+        },
+        "leaf_value_hex": "0x08",
+        "proof_hex": []
+      }
+    ]
+  },
+  "expected_outcome": "accept",
+  "owned_by": "shell-state",
+  "state_keys": [
+    "0x000000000000000000000000001111111111111111111111111111111111111111",
+    "0x0100000000000000000000000011111111111111111111111111111111111111112222222222222222222222222222222222222222222222222222222222222222",
+    "0x02000000000000000000000000333333333333333333333333333333333333333300000007",
+    "0x034444444444444444444444444444444444444444444444444444444444444444",
+    "0x0455555555555555555555555555555555555555555555555555555555555555"
+  ],
+  "proof_shape_kind": "reference_empty",
+  "notes": "This remains a repository-local comparator contract only: it pins the current canonical StateKey ordering across every provisional witness key family without claiming a finalized witness compression or proof-node wire format."
+}

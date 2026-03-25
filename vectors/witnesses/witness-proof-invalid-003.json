@@ -1,0 +1,50 @@
+{
+  "id": "witness-proof-invalid-003",
+  "category": "witness",
+  "rule": "reference_proof_reconstruction",
+  "description": "A reference-backend witness that is checked against a different expected pre-state root is rejected before any provisional proof-node layout is treated as consensus.",
+  "input": {
+    "proof_shape_kind": "reference_empty",
+    "materialized_state": [
+      {
+        "key": {
+          "kind": "account_header",
+          "address": "0x1111111111111111111111111111111111111111",
+          "canonical_key_hex": "0x000000000000000000000000001111111111111111111111111111111111111111"
+        },
+        "leaf_value_hex": "0xdeadbeef"
+      },
+      {
+        "key": {
+          "kind": "storage_slot",
+          "address": "0x1111111111111111111111111111111111111111",
+          "slot": "0x0101010101010101010101010101010101010101010101010101010101010101",
+          "canonical_key_hex": "0x0100000000000000000000000011111111111111111111111111111111111111110101010101010101010101010101010101010101010101010101010101010101"
+        },
+        "leaf_value_hex": "0xcafe"
+      }
+    ],
+    "expected_state_root": "0xc29b19be933adb914c312f0ef305668d27189058d8fbde447d5c36d0e81fce1b",
+    "witness": {
+      "key": {
+        "kind": "account_header",
+        "address": "0x1111111111111111111111111111111111111111",
+        "canonical_key_hex": "0x000000000000000000000000001111111111111111111111111111111111111111"
+      },
+      "leaf_value_hex": "0xdeadbeef",
+      "proof_hex": []
+    }
+  },
+  "expected_outcome": "reject",
+  "expected_error": {
+    "kind": "WitnessVerificationFailed",
+    "context": "reference proof path was built against a different state root"
+  },
+  "owned_by": "shell-state",
+  "state_keys": [
+    "0x000000000000000000000000001111111111111111111111111111111111111111",
+    "0x0100000000000000000000000011111111111111111111111111111111111111110101010101010101010101010101010101010101010101010101010101010101"
+  ],
+  "proof_shape_kind": "reference_empty",
+  "notes": "The witness/proof design is still provisional, but the current local contract is explicit about state-root binding: verification must fail closed when a valid witness is paired with the wrong expected pre-state root."
+}

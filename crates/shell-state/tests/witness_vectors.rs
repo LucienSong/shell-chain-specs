@@ -272,6 +272,15 @@ fn assert_state_error(fixture: &WitnessVector, expected: &WitnessExpectedError, 
                 );
             }
         }
+        ("WitnessVerificationFailed", StateError::WitnessVerificationFailed(actual)) => {
+            if let Some(expected_context) = &expected.context {
+                assert_eq!(
+                    actual, expected_context,
+                    "{} witness verification context mismatch",
+                    fixture.id
+                );
+            }
+        }
         (kind, actual) => panic!(
             "{} expected error kind {kind:?}, got {actual:?}",
             fixture.id

@@ -1,0 +1,50 @@
+{
+  "id": "witness-proof-invalid-002",
+  "category": "witness",
+  "rule": "reference_proof_reconstruction",
+  "description": "A reference-backend witness whose committed leaf value does not match the materialized pre-state is rejected as a local witness verification failure.",
+  "input": {
+    "proof_shape_kind": "reference_empty",
+    "materialized_state": [
+      {
+        "key": {
+          "kind": "account_header",
+          "address": "0x1111111111111111111111111111111111111111",
+          "canonical_key_hex": "0x000000000000000000000000001111111111111111111111111111111111111111"
+        },
+        "leaf_value_hex": "0xdeadbeef"
+      },
+      {
+        "key": {
+          "kind": "storage_slot",
+          "address": "0x1111111111111111111111111111111111111111",
+          "slot": "0x0101010101010101010101010101010101010101010101010101010101010101",
+          "canonical_key_hex": "0x0100000000000000000000000011111111111111111111111111111111111111110101010101010101010101010101010101010101010101010101010101010101"
+        },
+        "leaf_value_hex": "0xcafe"
+      }
+    ],
+    "expected_state_root": "0x54cf5a159f1646c7fc12fa79eeeee9cdf70d1cca45a3a2c73665f631df541a04",
+    "witness": {
+      "key": {
+        "kind": "account_header",
+        "address": "0x1111111111111111111111111111111111111111",
+        "canonical_key_hex": "0x000000000000000000000000001111111111111111111111111111111111111111"
+      },
+      "leaf_value_hex": "0xdeadbe00",
+      "proof_hex": []
+    }
+  },
+  "expected_outcome": "reject",
+  "expected_error": {
+    "kind": "WitnessVerificationFailed",
+    "context": "reference proof leaf does not match witness value"
+  },
+  "owned_by": "shell-state",
+  "state_keys": [
+    "0x000000000000000000000000001111111111111111111111111111111111111111",
+    "0x0100000000000000000000000011111111111111111111111111111111111111110101010101010101010101010101010101010101010101010101010101010101"
+  ],
+  "proof_shape_kind": "reference_empty",
+  "notes": "This vector documents the current local boundary only: the reference backend still derives proof paths internally, but a committed witness value that does not match the materialized leaf must fail closed as a typed reject."
+}

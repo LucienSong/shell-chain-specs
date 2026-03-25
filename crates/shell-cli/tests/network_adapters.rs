@@ -16,9 +16,9 @@ use shell_mempool::{
 };
 use shell_network::{NetworkConsensusAdapter, NetworkMempoolAdapter, NetworkOrigin, PeerId};
 use shell_primitives::{
-    GasPrice, ProposerCredential, ProposerCredentialQuery, ProposerCredentialResolutionError,
-    ProposerCredentialResolver, TransactionEnvelope, TransactionPayload, TransactionPayloadSsz,
-    ValidationOutcome, U256,
+    GasPrice, InvalidCredentialEncodingError, ProposerCredential, ProposerCredentialQuery,
+    ProposerCredentialResolutionError, ProposerCredentialResolver, TransactionEnvelope,
+    TransactionPayload, TransactionPayloadSsz, ValidationOutcome, U256,
 };
 
 struct TestDispatcher {
@@ -50,6 +50,10 @@ impl TestDispatcher {
 
     fn transaction_calls(&self) -> usize {
         self.transaction_calls.get()
+    }
+
+    fn validator_calls(&self) -> usize {
+        self.validator_calls.get()
     }
 }
 
@@ -98,14 +102,70 @@ impl ProposerCredentialResolver for FixedResolver {
     }
 }
 
-struct UnavailableResolver;
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ResolverFixture {
+    expected_query: ProposerCredentialQuery,
+    result: Result<ProposerCredential, ProposerCredentialResolutionError>,
+}
 
-impl ProposerCredentialResolver for UnavailableResolver {
+impl ResolverFixture {
+    fn success(scenario: &LocalReferenceScenario) -> Self {
+        Self {
+            expected_query: resolver_query(scenario),
+            result: Ok(ProposerCredential {
+                scheme_id: 0,
+                public_key_material: vec![0x44; 32],
+            }),
+        }
+    }
+
+    fn failure(
+        scenario: &LocalReferenceScenario,
+        error: ProposerCredentialResolutionError,
+    ) -> Self {
+        Self {
+            expected_query: resolver_query(scenario),
+            result: Err(error),
+        }
+    }
+}
+
+struct FixtureResolver {
+    fixture: ResolverFixture,
+    calls: Cell<usize>,
+    last_query: Cell<Option<ProposerCredentialQuery>>,
+}
+
+impl FixtureResolver {
+    fn new(fixture: ResolverFixture) -> Self {
+        Self {
+            fixture,
+            calls: Cell::new(0),
+            last_query: Cell::new(None),
+        }
+    }
+
+    fn calls(&self) -> usize {
+        self.calls.get()
+    }
+
+    fn last_query(&self) -> Option<ProposerCredentialQuery> {
+        self.last_query.get()
+    }
+}
+
+impl ProposerCredentialResolver for FixtureResolver {
     fn resolve_proposer_credential(
         &self,
-        _query: ProposerCredentialQuery,
+        query: ProposerCredentialQuery,
     ) -> Result<ProposerCredential, ProposerCredentialResolutionError> {
-        Err(ProposerCredentialResolutionError::ResolverUnavailable)
+        self.calls.set(self.calls.get() + 1);
+        self.last_query.set(Some(query));
+        assert_eq!(
+            query, self.fixture.expected_query,
+            "local harness proposer credential query drifted from fixture expectations"
+        );
+        self.fixture.result.clone()
     }
 }
 
@@ -241,7 +301,7 @@ fn mempool_adapter_fails_closed_for_altered_gossip_payloads() {
 fn consensus_adapter_accepts_reference_blocks() {
     let scenario = load_scenario("root-check-end-to-end-match-001.json");
     let dispatcher = TestDispatcher::permissive();
-    let resolver = FixedResolver;
+    let resolver = FixtureResolver::new(ResolverFixture::success(&scenario));
     let runtime = LocalReferenceRuntime::new(
         &dispatcher,
         &resolver,
@@ -261,6 +321,9 @@ fn consensus_adapter_accepts_reference_blocks() {
         .expect("reference block should validate");
 
     assert_eq!(outcome, ValidationOutcome::Accept);
+    assert_eq!(resolver.calls(), 1);
+    assert_eq!(resolver.last_query(), Some(resolver_query(&scenario)));
+    assert_eq!(dispatcher.validator_calls(), 1);
 }
 
 #[test]
@@ -322,6 +385,69 @@ fn consensus_adapter_maps_invalid_reference_blocks_to_reject() {
         .expect("invalid remote blocks should map to reject");
 
     assert_eq!(outcome, ValidationOutcome::Reject);
+}
+
+#[test]
+fn consensus_adapter_rejects_consensus_invalid_resolution_failures() {
+    #[derive(Debug, Clone, Copy)]
+    struct Case {
+        name: &'static str,
+        error: ProposerCredentialResolutionError,
+    }
+
+    let cases = [
+        Case {
+            name: "missing proposer credentials",
+            error: ProposerCredentialResolutionError::NotFound,
+        },
+        Case {
+            name: "invalid credential encoding",
+            error: ProposerCredentialResolutionError::InvalidCredentialEncoding(
+                InvalidCredentialEncodingError {
+                    scheme_id: 0,
+                    context: "fixture resolver returned malformed proposer key",
+                },
+            ),
+        },
+    ];
+
+    for case in cases {
+        let scenario = load_scenario("root-check-end-to-end-match-001.json");
+        let dispatcher = TestDispatcher::permissive();
+        let resolver = FixtureResolver::new(ResolverFixture::failure(&scenario, case.error));
+        let runtime = LocalReferenceRuntime::new(
+            &dispatcher,
+            &resolver,
+            AdmissionPolicy::default(),
+            BlockImportConfig::default(),
+        );
+        let adapter = LocalReferenceNetworkConsensusAdapter::try_new(&runtime, &scenario)
+            .expect("adapter builds");
+
+        let outcome = adapter
+            .validate_gossip_block(
+                &peer_origin(),
+                &scenario.block.header,
+                &scenario.block.body,
+                &scenario.block.sidecar,
+            )
+            .unwrap_or_else(|error| {
+                panic!(
+                    "{} should map through the local harness as a typed outcome, got {error:?}",
+                    case.name
+                )
+            });
+
+        assert_eq!(outcome, ValidationOutcome::Reject, "{}", case.name);
+        assert_eq!(resolver.calls(), 1, "{}", case.name);
+        assert_eq!(
+            resolver.last_query(),
+            Some(resolver_query(&scenario)),
+            "{}",
+            case.name
+        );
+        assert_eq!(dispatcher.validator_calls(), 0, "{}", case.name);
+    }
 }
 
 #[test]
@@ -393,7 +519,10 @@ fn consensus_adapter_rejects_altered_gossip_block_inputs() {
 fn consensus_adapter_preserves_internal_resolution_errors() {
     let scenario = load_scenario("root-check-end-to-end-match-001.json");
     let dispatcher = TestDispatcher::permissive();
-    let resolver = UnavailableResolver;
+    let resolver = FixtureResolver::new(ResolverFixture::failure(
+        &scenario,
+        ProposerCredentialResolutionError::ResolverUnavailable,
+    ));
     let runtime = LocalReferenceRuntime::new(
         &dispatcher,
         &resolver,
@@ -418,6 +547,9 @@ fn consensus_adapter_preserves_internal_resolution_errors() {
             ProposerCredentialResolutionError::ResolverUnavailable
         )
     );
+    assert_eq!(resolver.calls(), 1);
+    assert_eq!(resolver.last_query(), Some(resolver_query(&scenario)));
+    assert_eq!(dispatcher.validator_calls(), 0);
 }
 
 fn load_scenario(name: &str) -> LocalReferenceScenario {
@@ -429,6 +561,13 @@ fn fixture_path(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../vectors/root-checks")
         .join(name)
+}
+
+fn resolver_query(scenario: &LocalReferenceScenario) -> ProposerCredentialQuery {
+    ProposerCredentialQuery {
+        block_root: scenario.block.header.block_root,
+        proposer_index_hint: scenario.block.header.proposer_index_hint,
+    }
 }
 
 fn peer_origin() -> NetworkOrigin {

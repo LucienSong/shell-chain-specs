@@ -1,0 +1,45 @@
+{
+  "id": "witness-order-noncanonical-002",
+  "category": "witness",
+  "rule": "canonical_state_key_ordering",
+  "description": "A witness list with repeated canonical StateKey bytes is rejected because the current ordering contract requires keys to be strictly increasing, not merely non-decreasing.",
+  "input": {
+    "ordering_is_canonical": false,
+    "proof_shape_kind": "reference_empty",
+    "witnesses": [
+      {
+        "key": {
+          "kind": "storage_slot",
+          "address": "0x1111111111111111111111111111111111111111",
+          "slot": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "canonical_key_hex": "0x010000000000000000000000001111111111111111111111111111111111111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "leaf_value_hex": "0xaa",
+        "proof_hex": []
+      },
+      {
+        "key": {
+          "kind": "storage_slot",
+          "address": "0x1111111111111111111111111111111111111111",
+          "slot": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "canonical_key_hex": "0x010000000000000000000000001111111111111111111111111111111111111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "leaf_value_hex": "0xbb",
+        "proof_hex": []
+      }
+    ]
+  },
+  "expected_outcome": "reject",
+  "expected_error": {
+    "kind": "NonCanonicalWitnessOrdering",
+    "index": 1,
+    "context": "witness keys must be strictly increasing in canonical StateKey order"
+  },
+  "owned_by": "shell-state",
+  "state_keys": [
+    "0x010000000000000000000000001111111111111111111111111111111111111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "0x010000000000000000000000001111111111111111111111111111111111111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  ],
+  "proof_shape_kind": "reference_empty",
+  "notes": "Duplicate committed witness keys are a current local reject path at the canonical ordering gate. That strictness is exercised intentionally while the detailed witness/proof wire format stays provisional."
+}

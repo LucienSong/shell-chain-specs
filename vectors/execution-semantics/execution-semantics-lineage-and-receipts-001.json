@@ -1,0 +1,87 @@
+{
+  "id": "execution-semantics-lineage-and-receipts-001",
+  "category": "execution-semantics",
+  "rule": "cumulative_state_lineage_and_receipt_commitments",
+  "description": "Two planned transactions update reference state cumulatively in block order while receipt roots stay sensitive to the status code even when the output bytes are identical.",
+  "input": {
+    "transaction_vector_ids": [
+      "tx-basic-valid-001",
+      "tx-create-valid-001"
+    ],
+    "materialized_state": [
+      {
+        "key": {
+          "kind": "raw_tree_key",
+          "raw_key": "0x1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        "leaf_value_hex": "0xaabb"
+      },
+      {
+        "key": {
+          "kind": "raw_tree_key",
+          "raw_key": "0x2222222222222222222222222222222222222222222222222222222222222222"
+        },
+        "leaf_value_hex": "0xbbcc"
+      }
+    ],
+    "steps": [
+      {
+        "transaction_vector_id": "tx-basic-valid-001",
+        "patch": {
+          "writes": [
+            {
+              "key": {
+                "kind": "raw_tree_key",
+                "raw_key": "0x1111111111111111111111111111111111111111111111111111111111111111"
+              },
+              "leaf_value_hex": "0x0102"
+            },
+            {
+              "key": {
+                "kind": "raw_tree_key",
+                "raw_key": "0x3333333333333333333333333333333333333333333333333333333333333333"
+              },
+              "leaf_value_hex": "0x99"
+            }
+          ]
+        },
+        "receipt_status_code": 1,
+        "receipt_output_hex": "0x55",
+        "expected_post_state_root": "0x51a394ffc299e2063f4709eb9ebf86943383094595f4e14f98fef0cf6ec35114",
+        "expected_receipt_root": "0xa5114dade6ed47e66c17732a81050164a7e8c80dd743ad01a5c002e7bba881e5"
+      },
+      {
+        "transaction_vector_id": "tx-create-valid-001",
+        "patch": {
+          "writes": [
+            {
+              "key": {
+                "kind": "raw_tree_key",
+                "raw_key": "0x2222222222222222222222222222222222222222222222222222222222222222"
+              },
+              "leaf_value_hex": "0x030405"
+            },
+            {
+              "key": {
+                "kind": "raw_tree_key",
+                "raw_key": "0x4444444444444444444444444444444444444444444444444444444444444444"
+              },
+              "leaf_value_hex": "0xbbccdd"
+            }
+          ]
+        },
+        "receipt_status_code": 0,
+        "receipt_output_hex": "0x55",
+        "expected_post_state_root": "0x86cf5e7120d16b832c80081e066f882a60e52fd3a641b5331fb40c727e4642e0",
+        "expected_receipt_root": "0x0b0ddc3c597fd20ffe9b3e061ad35d45c474ac20d5bc8ad62575ea2021ec82e7"
+      }
+    ]
+  },
+  "expected_outcome": "accept",
+  "owned_by": "shell-execution",
+  "pre_state_root": "0xe913d4ccc169fa669a55af74cf8ed9e16f608cbfb96f13e35be63af6caee1e81",
+  "post_state_root": "0x86cf5e7120d16b832c80081e066f882a60e52fd3a641b5331fb40c727e4642e0",
+  "receipts_root": "0x80a9d3fb39ce7dbb22e2aa11107461d7e17cd08884a14bcb19eb66f0da378281",
+  "planner_exhausted": true,
+  "notes": "The two receipts intentionally reuse the same output bytes so the vector proves that status_code remains part of the canonical receipt commitment."
+}

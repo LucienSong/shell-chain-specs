@@ -735,6 +735,98 @@ pub struct RootCheckExpectedError {
     pub actual_root: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExecutionSemanticsVector {
+    pub id: String,
+    pub category: String,
+    pub rule: String,
+    pub description: String,
+    pub input: ExecutionSemanticsInput,
+    pub expected_outcome: String,
+    #[serde(default)]
+    pub expected_error: Option<ExecutionSemanticsExpectedError>,
+    pub owned_by: String,
+    #[serde(default)]
+    pub notes: Option<String>,
+    pub pre_state_root: String,
+    #[serde(default)]
+    pub post_state_root: Option<String>,
+    #[serde(default)]
+    pub receipts_root: Option<String>,
+    #[serde(default)]
+    pub planner_exhausted: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExecutionSemanticsInput {
+    #[serde(default)]
+    pub transaction_vector_ids: Vec<String>,
+    #[serde(default)]
+    pub materialized_state: Vec<MaterializedLeafFixture>,
+    #[serde(default)]
+    pub steps: Vec<ExecutionSemanticsStep>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExecutionSemanticsStep {
+    pub transaction_vector_id: String,
+    pub patch: ExecutionSemanticsPatch,
+    pub receipt_status_code: u8,
+    pub receipt_output_hex: String,
+    #[serde(default)]
+    pub expected_post_state_root: Option<String>,
+    #[serde(default)]
+    pub expected_receipt_root: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExecutionSemanticsPatch {
+    pub writes: Vec<MaterializedLeafFixture>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExecutionSemanticsExpectedError {
+    pub kind: String,
+    #[serde(default)]
+    pub index: Option<usize>,
+    #[serde(default)]
+    pub context: Option<String>,
+}
+
+impl ExecutionSemanticsVector {
+    pub fn materialized_state(&self) -> Vec<(StateKey, Vec<u8>)> {
+        self.input
+            .materialized_state
+            .iter()
+            .map(MaterializedLeafFixture::to_entry)
+            .collect()
+    }
+}
+
+impl ExecutionSemanticsStep {
+    pub fn state_patch(&self) -> StatePatch {
+        let entries = self
+            .patch
+            .writes
+            .iter()
+            .map(MaterializedLeafFixture::to_entry)
+            .collect::<Vec<_>>();
+        StatePatch {
+            accesses: entries.iter().map(|(key, _)| key.clone()).collect(),
+            new_values: entries.into_iter().map(|(_, value)| value).collect(),
+        }
+    }
+
+    pub fn receipt_output(&self) -> Vec<u8> {
+        parse_hex(&self.receipt_output_hex)
+    }
+}
+
 #[derive(Debug)]
 pub struct LoadedRootCheckScenario {
     pub fixture: RootCheckVector,
@@ -807,6 +899,10 @@ pub fn witness_fixture_paths() -> Vec<PathBuf> {
 
 pub fn root_check_fixture_paths() -> Vec<PathBuf> {
     fixture_paths("root-checks")
+}
+
+pub fn execution_semantics_fixture_paths() -> Vec<PathBuf> {
+    fixture_paths("execution-semantics")
 }
 
 pub fn fixture_paths(category: &str) -> Vec<PathBuf> {
@@ -1222,7 +1318,12 @@ fn parse_bytes_32(value: &str) -> [u8; 32] {
 
 #[cfg(test)]
 mod tests {
-    use super::{load_root_check_scenario, root_check_fixture_paths};
+    use super::{
+        execution_semantics_fixture_paths, load_fixture, load_root_check_scenario,
+        materialize_root_check_accumulator, parse_root, root_check_fixture_paths,
+        ExecutionSemanticsVector,
+    };
+    use shell_state::StateAccumulator;
 
     #[test]
     fn shared_root_check_loader_materializes_canonical_scenarios() {
@@ -1267,6 +1368,61 @@ mod tests {
                 scenario.steps.len(),
                 scenario.transactions.len(),
                 "{} shared loader must keep execution steps aligned",
+                fixture.id
+            );
+        }
+    }
+
+    #[test]
+    fn execution_semantics_vectors_bind_materialized_pre_state_roots() {
+        let mut paths = execution_semantics_fixture_paths();
+        paths.sort();
+
+        assert!(
+            !paths.is_empty(),
+            "expected at least one execution-semantics fixture under vectors/execution-semantics"
+        );
+
+        for path in paths {
+            let fixture: ExecutionSemanticsVector = load_fixture(&path);
+            let accumulator =
+                materialize_root_check_accumulator(&fixture.materialized_state(), &fixture.id);
+
+            assert_eq!(
+                path.file_stem().and_then(|stem| stem.to_str()),
+                Some(fixture.id.as_str()),
+                "fixture id must match filename stem"
+            );
+            assert_eq!(
+                fixture.category, "execution-semantics",
+                "{} must declare category execution-semantics",
+                fixture.id
+            );
+            assert_eq!(
+                fixture.owned_by, "shell-execution",
+                "{} must stay owned by shell-execution",
+                fixture.id
+            );
+            assert!(
+                !fixture.description.trim().is_empty(),
+                "{} must document the invariant it covers",
+                fixture.id
+            );
+            assert_eq!(
+                accumulator.state_root(),
+                parse_root(&fixture.pre_state_root),
+                "{} pre_state_root drifted from the materialized state",
+                fixture.id
+            );
+            assert_eq!(
+                fixture.input.transaction_vector_ids,
+                fixture
+                    .input
+                    .steps
+                    .iter()
+                    .map(|step| step.transaction_vector_id.clone())
+                    .collect::<Vec<_>>(),
+                "{} transaction_vector_ids must stay aligned with execution steps",
                 fixture.id
             );
         }
@@ -1331,6 +1487,12 @@ impl StateKeyInput {
                 canonical_key_hex, ..
             } => canonical_key_hex.as_deref(),
         }
+    }
+}
+
+impl MaterializedLeafFixture {
+    fn to_entry(&self) -> (StateKey, Vec<u8>) {
+        (self.key.to_state_key(), parse_hex(&self.leaf_value_hex))
     }
 }
 

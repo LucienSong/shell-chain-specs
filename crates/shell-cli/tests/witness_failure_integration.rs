@@ -8,7 +8,9 @@ use shell_consensus::{BlockImportConfig, ConsensusError};
 use shell_crypto::{
     CryptoError, SignatureDispatcher, SignatureVerificationRequest, SignatureVerifier,
 };
-use shell_fixtures::{compute_execution_witnesses_root, load_root_check_scenario};
+use shell_fixtures::{
+    compute_execution_witnesses_root, load_root_check_scenario, load_witness_fixture_by_id,
+};
 use shell_mempool::AdmissionPolicy;
 use shell_network::{
     peer_action_for_consensus_error, peer_action_for_validation_outcome, NetworkConsensusAdapter,
@@ -66,12 +68,27 @@ impl ProposerCredentialResolver for FixedResolver {
 }
 
 #[test]
-fn local_reference_harness_preserves_witness_leaf_corruption_as_a_typed_reject() {
+fn local_reference_harness_preserves_noncanonical_witness_order_vectors_as_typed_rejects() {
     let mut scenario = load_scenario("root-check-end-to-end-match-001.json");
-    scenario.block.sidecar.witnesses[0].leaf_value.push(0xFF);
-    let committed_root = compute_execution_witnesses_root(&scenario.block.sidecar.witnesses);
-    scenario.block.sidecar.execution_witnesses_root = committed_root;
-    scenario.block.header.execution_witnesses_root = committed_root;
+    let vector = load_witness_fixture_by_id("witness-order-noncanonical-002");
+    scenario.block.sidecar.witnesses = vector.witnesses();
+    rebind_execution_witnesses_root(&mut scenario);
+
+    assert_witness_failure(
+        scenario,
+        StateError::NonCanonicalWitnessOrdering(shell_state::WitnessOrderingError {
+            index: 1,
+            context: "witness keys must be strictly increasing in canonical StateKey order",
+        }),
+    );
+}
+
+#[test]
+fn local_reference_harness_preserves_shared_witness_leaf_boundary_vectors_as_typed_rejects() {
+    let mut scenario = load_scenario("root-check-end-to-end-match-001.json");
+    let vector = load_witness_fixture_by_id("witness-proof-invalid-002");
+    scenario.block.sidecar.witnesses[0] = vector.witness().expect("single witness fixture");
+    rebind_execution_witnesses_root(&mut scenario);
 
     assert_witness_failure(
         scenario,
@@ -82,15 +99,20 @@ fn local_reference_harness_preserves_witness_leaf_corruption_as_a_typed_reject()
 #[test]
 fn local_reference_harness_maps_invalid_committed_witness_shapes_to_invalid_block_rejects() {
     let mut scenario = load_scenario("root-check-end-to-end-match-001.json");
-    scenario.block.sidecar.witnesses[0].proof.push([0xAA; 32]);
-    let committed_root = compute_execution_witnesses_root(&scenario.block.sidecar.witnesses);
-    scenario.block.sidecar.execution_witnesses_root = committed_root;
-    scenario.block.header.execution_witnesses_root = committed_root;
+    let vector = load_witness_fixture_by_id("witness-proof-invalid-001");
+    scenario.block.sidecar.witnesses[0] = vector.witness().expect("single witness fixture");
+    rebind_execution_witnesses_root(&mut scenario);
 
     assert_witness_failure(
         scenario,
         StateError::UnsupportedProofShape(REFERENCE_BACKEND_PROOF_SHAPE_CONTEXT),
     );
+}
+
+fn rebind_execution_witnesses_root(scenario: &mut LocalReferenceScenario) {
+    let committed_root = compute_execution_witnesses_root(&scenario.block.sidecar.witnesses);
+    scenario.block.sidecar.execution_witnesses_root = committed_root;
+    scenario.block.header.execution_witnesses_root = committed_root;
 }
 
 fn assert_witness_failure(scenario: LocalReferenceScenario, expected_state_error: StateError) {

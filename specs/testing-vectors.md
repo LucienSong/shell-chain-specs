@@ -42,6 +42,7 @@ When repository-level fixtures are added, they should live under:
 
 ```text
 vectors/
+├── execution-semantics/
 ├── transactions/
 ├── blocks/
 ├── root-checks/
@@ -73,7 +74,7 @@ At minimum, each vector should carry:
 | Field | Meaning |
 |---|---|
 | `id` | Stable unique vector identifier |
-| `category` | `transaction`, `signature`, `witness`, `block`, `validation-order`, or `peer-action` |
+| `category` | `transaction`, `signature`, `witness`, `block`, `execution-semantics`, `validation-order`, or `peer-action` |
 | `description` | Human-readable explanation of the invariant being tested |
 | `input` | Canonical encoded object or structured object fields needed to build it |
 | `expected_outcome` | `accept`, `reject`, or `policy_reject` |
@@ -109,6 +110,16 @@ Recommended extra fields by category:
   - `transactions_root`
   - `execution_witnesses_root`
   - `state_root`
+  - `receipts_root`
+
+- execution-semantics vectors
+  - `transaction_vector_ids`
+  - `materialized_state`
+  - `steps[*].patch.writes`
+  - `steps[*].expected_post_state_root`
+  - `steps[*].expected_receipt_root`
+  - `pre_state_root`
+  - `post_state_root`
   - `receipts_root`
 
 Fixture format is not yet frozen, but it should be chosen once at the repository level and reused consistently.
@@ -231,7 +242,9 @@ Owns vectors for:
 - post-state root calculation,
 - receipts-root calculation,
 - execution ordering in block order,
-- transition-output determinism for a fixed witness view.
+- transition-output determinism for a fixed witness view,
+- empty-block behavior that preserves the pre-state root and canonical empty receipts root,
+- fail-closed rejection when a planned state patch violates canonical `StateKey` ordering.
 
 ### 6.5 `shell-mempool`
 
@@ -336,7 +349,18 @@ The first complete test corpus should cover the following matrix.
 | `block-execution-roots-match-*` | computed `state_root` and `receipts_root` match header after execution | accept | `shell-execution` + `shell-consensus` |
 | `block-execution-roots-mismatch-*` | execution output fails final root comparison | reject | `shell-execution` + `shell-consensus` |
 
-### 7.5.1 End-to-End Root-Check Vectors
+### 7.5.1 Execution Semantics Vectors
+
+These vectors stay harness-local and deterministic.
+They reuse canonical transaction fixtures plus materialized reference-state leaves so `shell-execution` can prove state-lineage and receipt-commitment behavior without widening scope into transport or operator policy.
+
+| ID family | Invariant | Expected outcome | Primary crate |
+|---|---|---|---|
+| `execution-semantics-empty-block-*` | an empty block preserves the pre-state root and canonical empty receipts root | accept | `shell-execution` |
+| `execution-semantics-lineage-and-receipts-*` | sequential patches advance post-state roots cumulatively in block order and receipt commitments remain sensitive to status/output bytes | accept | `shell-execution` |
+| `execution-semantics-noncanonical-patch-reject-*` | a non-canonical planned patch rejects before mutating state or consuming later planned steps | reject | `shell-execution` |
+
+### 7.5.2 End-to-End Root-Check Vectors
 
 These vectors intentionally sit one layer above the simple block-binding fixtures.
 They reuse canonical transaction fixtures and canonical witness fixtures so `shell-state`, `shell-execution`, and `shell-consensus` all consume the same pre-state, transaction list, execution steps, and final committed roots.

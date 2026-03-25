@@ -1,0 +1,33 @@
+{
+  "id": "execution-semantics-empty-block-001",
+  "category": "execution-semantics",
+  "rule": "empty_block_preserves_materialized_state",
+  "description": "An empty block keeps the pre-materialized state root unchanged and uses the canonical empty receipts root.",
+  "input": {
+    "transaction_vector_ids": [],
+    "materialized_state": [
+      {
+        "key": {
+          "kind": "raw_tree_key",
+          "raw_key": "0x1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        "leaf_value_hex": "0xaabb"
+      },
+      {
+        "key": {
+          "kind": "raw_tree_key",
+          "raw_key": "0x2222222222222222222222222222222222222222222222222222222222222222"
+        },
+        "leaf_value_hex": "0xbbcc"
+      }
+    ],
+    "steps": []
+  },
+  "expected_outcome": "accept",
+  "owned_by": "shell-execution",
+  "pre_state_root": "0xe913d4ccc169fa669a55af74cf8ed9e16f608cbfb96f13e35be63af6caee1e81",
+  "post_state_root": "0xe913d4ccc169fa669a55af74cf8ed9e16f608cbfb96f13e35be63af6caee1e81",
+  "receipts_root": "0xdd4d7638f40aef3c24693d88a242e3a9dc41b81764d0826b5b12a110e98c00a5",
+  "planner_exhausted": true,
+  "notes": "This stays harness-local and proves that execution does not invent state transitions or receipts when the block body is empty."
+}

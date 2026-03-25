@@ -10,10 +10,10 @@ use shell_crypto::{
 };
 use shell_execution::ExecutionError;
 use shell_fixtures::load_root_check_scenario;
-use shell_mempool::AdmissionPolicy;
+use shell_mempool::{AdmissionPolicy, AdmissionStateView, NoncePolicy, ValidationError};
 use shell_primitives::{
     ProposerCredential, ProposerCredentialQuery, ProposerCredentialResolutionError,
-    ProposerCredentialResolver,
+    ProposerCredentialResolver, TransactionEnvelope, TransactionPayload,
 };
 
 struct PermissiveDispatcher {
@@ -83,6 +83,28 @@ impl ProposerCredentialResolver for FixedResolver {
     }
 }
 
+#[derive(Clone, Copy)]
+enum DerivedNonceMode {
+    Exact,
+    ReplayReject,
+    FutureGapReject,
+}
+
+struct DerivedNonceView {
+    mode: DerivedNonceMode,
+}
+
+impl AdmissionStateView for DerivedNonceView {
+    fn observed_nonce(&self, envelope: &TransactionEnvelope) -> Option<u64> {
+        let nonce = transaction_nonce(envelope);
+        Some(match self.mode {
+            DerivedNonceMode::Exact => nonce,
+            DerivedNonceMode::ReplayReject => nonce.saturating_add(1),
+            DerivedNonceMode::FutureGapReject => nonce.saturating_sub(1),
+        })
+    }
+}
+
 #[test]
 fn local_reference_runtime_imports_the_documented_match_flow() {
     let loaded = load_root_check_scenario(&fixture_path("root-check-end-to-end-match-001.json"));
@@ -115,6 +137,45 @@ fn local_reference_runtime_imports_the_documented_match_flow() {
     assert_eq!(
         outcome.import_outcome.receipts_root,
         scenario.block.header.receipts_root
+    );
+
+    let authorization_count = scenario
+        .admission_transactions
+        .iter()
+        .map(|transaction| transaction.authorizations.len())
+        .sum::<usize>();
+    assert_eq!(dispatcher.transaction_calls(), authorization_count * 2);
+    assert_eq!(dispatcher.validator_calls(), 1);
+}
+
+#[test]
+fn local_reference_runtime_accepts_reference_flow_with_admission_state_nonce_checks() {
+    let loaded = load_root_check_scenario(&fixture_path("root-check-end-to-end-match-001.json"));
+    let scenario = LocalReferenceScenario::from_root_check_scenario(&loaded.scenario);
+    let dispatcher = PermissiveDispatcher::new();
+    let resolver = FixedResolver;
+    let nonce_view = DerivedNonceView {
+        mode: DerivedNonceMode::Exact,
+    };
+    let runtime = LocalReferenceRuntime::new(
+        &dispatcher,
+        &resolver,
+        AdmissionPolicy::default(),
+        BlockImportConfig::default(),
+    )
+    .with_admission_state_view(&nonce_view);
+
+    let outcome = runtime
+        .run(&scenario)
+        .expect("matching observed nonces should preserve the documented flow");
+
+    assert_eq!(
+        outcome.admissions.len(),
+        scenario.block.body.transactions.len()
+    );
+    assert_eq!(
+        outcome.import_outcome.block_root,
+        scenario.block.header.block_root
     );
 
     let authorization_count = scenario
@@ -308,6 +369,75 @@ fn local_reference_runtime_rejects_duplicate_admission_payload_roots_before_impo
     assert_eq!(dispatcher.validator_calls(), 0);
 }
 
+#[test]
+fn local_reference_runtime_rejects_replayed_nonces_via_admission_state_view() {
+    let scenario = load_scenario("root-check-end-to-end-match-001.json");
+    let dispatcher = PermissiveDispatcher::new();
+    let resolver = FixedResolver;
+    let nonce_view = DerivedNonceView {
+        mode: DerivedNonceMode::ReplayReject,
+    };
+    let runtime = LocalReferenceRuntime::new(
+        &dispatcher,
+        &resolver,
+        AdmissionPolicy::default(),
+        BlockImportConfig::default(),
+    )
+    .with_admission_state_view(&nonce_view);
+
+    let error = runtime
+        .run(&scenario)
+        .expect_err("replayed nonces should fail closed before authorization verification");
+
+    assert_eq!(
+        error,
+        LocalReferenceError::Admission(ValidationError::NoncePolicy(
+            shell_mempool::NoncePolicyError {
+                context: "transaction nonce is lower than the observed replay lane nonce",
+            }
+        ))
+    );
+    assert_eq!(dispatcher.transaction_calls(), 0);
+    assert_eq!(dispatcher.validator_calls(), 0);
+}
+
+#[test]
+fn local_reference_runtime_rejects_future_nonce_gap_via_admission_state_view() {
+    let scenario = load_scenario("root-check-end-to-end-match-001.json");
+    let dispatcher = PermissiveDispatcher::new();
+    let resolver = FixedResolver;
+    let nonce_view = DerivedNonceView {
+        mode: DerivedNonceMode::FutureGapReject,
+    };
+    let runtime = LocalReferenceRuntime::new(
+        &dispatcher,
+        &resolver,
+        AdmissionPolicy {
+            nonce_policy: NoncePolicy {
+                max_future_nonce_gap: 0,
+            },
+            ..AdmissionPolicy::default()
+        },
+        BlockImportConfig::default(),
+    )
+    .with_admission_state_view(&nonce_view);
+
+    let error = runtime
+        .run(&scenario)
+        .expect_err("future nonce gaps should fail closed before authorization verification");
+
+    assert_eq!(
+        error,
+        LocalReferenceError::Admission(ValidationError::NoncePolicy(
+            shell_mempool::NoncePolicyError {
+                context: "transaction nonce exceeds the configured future replay lane gap",
+            }
+        ))
+    );
+    assert_eq!(dispatcher.transaction_calls(), 0);
+    assert_eq!(dispatcher.validator_calls(), 0);
+}
+
 fn load_scenario(name: &str) -> LocalReferenceScenario {
     let loaded = load_root_check_scenario(&fixture_path(name));
     LocalReferenceScenario::from_root_check_scenario(&loaded.scenario)
@@ -317,4 +447,11 @@ fn fixture_path(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../vectors/root-checks")
         .join(name)
+}
+
+fn transaction_nonce(envelope: &TransactionEnvelope) -> u64 {
+    match envelope.payload.payload() {
+        TransactionPayload::Basic(payload) => payload.nonce,
+        TransactionPayload::Create(payload) => payload.nonce,
+    }
 }
