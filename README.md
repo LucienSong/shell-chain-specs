@@ -1,6 +1,6 @@
 # shell-chain
 
-> A docs-first Rust repository for a natively quantum-safe smart-contract chain.
+> A docs-first Rust repository for a smart-contract chain designed for post-quantum security.
 > The project is designed from genesis around post-quantum assumptions, not as a retrofit for a legacy chain.
 
 ## Project Phases
@@ -9,7 +9,7 @@
 
 **Purpose**
 
-Prove the protocol end to end locally with a thin reference harness while keeping the project docs-first and PQ-native.
+Prove the protocol end to end locally with a thin reference harness while keeping the project docs-first and designed for post-quantum security from genesis.
 
 **What exists today**
 
@@ -34,7 +34,7 @@ Prove the protocol end to end locally with a thin reference harness while keepin
 - Do not describe `shell-cli` as a user-facing node, transport service, RPC server, daemon, or operator workflow.
 - Do not imply multi-node behavior, adversarial networking, recovery, or operational guarantees.
 - Do not freeze validator credential, witness/proof encoding or compression, or networking details that still need spec-first refinement.
-- Do not reintroduce legacy migration assumptions that weaken the native post-quantum design.
+- Do not reintroduce legacy migration assumptions that weaken the post-quantum design established from genesis.
 
 ### Phase roadmap
 
@@ -42,13 +42,13 @@ Prove the protocol end to end locally with a thin reference harness while keepin
 |---|---|---|---|
 | **docs-and-scaffold** | Lock the protocol shape, crate boundaries, validation order, and fixture ownership. | Docs, specs, and workspace boundaries are coherent enough to support a local reference flow. | Avoid implying a working local reference implementation before the harness proves it. |
 | **MVP** | Prove the protocol end to end locally as a reference implementation, with `shell-cli` limited to thin local harness duties. | A local reference flow can admit transactions, validate witnesses, execute state transitions, and import blocks against documented fixtures through fixture-runner and local-wiring helpers that do not claim operator or RPC status. | Avoid treating `shell-cli` as an operator surface, RPC API, production/runtime node, or performance work that hides protocol clarity. |
-| **Testnet** | Validate the chain under adversarial networking and real operator use. | Multi-node behavior, peer policy, recovery, and operator workflows have been exercised under hostile conditions with docs that match reality. | Avoid mainnet promises, irreversible parameter freezes, or compatibility shortcuts that compromise the PQ-first design. |
-| **Mainnet** | Launch a stable production chain built around native PQ assumptions from genesis. | Releases, operator procedures, upgrade discipline, and network behavior are stable enough for production use. | Avoid treating quantum safety as an optional migration layer or expanding scope faster than the protocol can remain coherent. |
+| **Testnet** | Validate the chain under adversarial networking and real operator use. | Multi-node behavior, peer policy, recovery, and operator workflows have been exercised under hostile conditions with docs that match reality. | Avoid mainnet promises, irreversible parameter freezes, or compatibility shortcuts that compromise the post-quantum design. |
+| **Mainnet** | Launch a stable production chain built around post-quantum assumptions from genesis. | Releases, operator procedures, upgrade discipline, and network behavior are stable enough for production use. | Avoid treating post-quantum security as an optional migration layer or expanding scope faster than the protocol can remain coherent. |
 
 ## North Star and Guardrails
 
 - Keep `shell-chain` docs-first until the documented contracts are strong enough to drive implementation, fixtures, and validation.
-- Build toward a chain that is natively quantum-safe from the start rather than patched later for post-quantum compatibility.
+- Build toward a chain designed for post-quantum security from the start rather than patched later for post-quantum compatibility.
 - Keep one canonical SSZ/object model so roots, encoding, and signing inputs do not drift across crates.
 - Prefer cheap-first stateless validation before expensive proof reconstruction, execution, or peer-policy work.
 - Keep unfinished protocol areas explicit and provisional instead of letting placeholders become accidental APIs.

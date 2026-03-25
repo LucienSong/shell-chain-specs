@@ -24,7 +24,7 @@ The strengthened MVP harness now covers more than the original scaffold: reposit
 | **docs-and-scaffold** | Define the protocol shape clearly enough to drive scaffolding, fixtures, and validation order. |
 | **MVP** | Support a local end-to-end reference flow without hand-waving crate responsibilities, while keeping `shell-cli` limited to thin local harness wiring. |
 | **Testnet** | Expand into adversarial networking and operator realities without breaking the documented core model. |
-| **Mainnet** | Stabilize around production operation while preserving the PQ-native design from genesis. |
+| **Mainnet** | Stabilize around production operation while preserving the post-quantum design from genesis. |
 
 ## Scope
 
@@ -46,7 +46,7 @@ The documents here assume the following core ideas throughout the repository:
 
 - **Envelope and sidecar separation**: transaction payloads and the larger witness data needed for stateless checks are modeled as related but distinct objects.
 - **Canonical SSZ behavior**: wire-facing objects must preserve exact SSZ (SimpleSerialize) encode/decode and merkleization behavior.
-- **PQ-capable authorization paths**: signature verification is dispatched through a scheme-aware abstraction for post-quantum-capable signing instead of hard-coding a legacy signature family.
+- **Post-quantum authorization paths**: signature verification is dispatched through a scheme-aware abstraction for post-quantum-capable signing instead of hard-coding a legacy signature family.
 - **Cheap-first validation**: structural decoding, root checks, and fee-floor checks happen before expensive proof reconstruction or heavy execution.
 - **Unified state accumulator**: state access proofs target a compressed binary-tree style accumulator and stateless verification flow.
 

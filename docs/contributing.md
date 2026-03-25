@@ -3,7 +3,7 @@
 ## Contributing in the Current Phase
 
 `shell-chain` is in the **MVP** phase, currently focused on an honest local reference harness.
-Contributions should help keep the docs-first, natively quantum-safe design aligned with the MVP-local flow the repository actually proves.
+Contributions should help keep the docs-first design aligned with a post-quantum architecture that matches the MVP-local flow the repository actually proves.
 
 Useful work in this phase includes:
 
@@ -20,7 +20,7 @@ Before making a change, keep these constraints in mind:
 
 - Do not describe the repository as a runnable node or stable operator surface.
 - Do not treat `shell-cli` as an operator surface, RPC API, or production/runtime node; in MVP work it stays a thin local harness.
-- Do not move the project toward a migration retrofit; keep the design native to post-quantum assumptions from genesis.
+- Do not move the project toward a migration retrofit; keep the design anchored in post-quantum assumptions from genesis.
 - Do not freeze unsettled validator, witness, or networking details just to make the docs sound more complete.
 
 ## Provisional vs. Closed MVP Behavior
@@ -76,7 +76,7 @@ Reviewers should check that a contribution:
 - improves local clarity,
 - keeps the repository self-contained,
 - matches the current project phase,
-- stays consistent with a docs-first, PQ-native direction,
+- stays consistent with a docs-first, post-quantum design direction,
 - updates the relevant docs or specs when behavior changes,
 - and leaves the documented validation commands green.
 

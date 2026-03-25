@@ -12,7 +12,7 @@ Prove a local end-to-end reference flow from repository-local docs, specs, fixtu
 
 **What that means today**
 
-- The repository is still docs-first and PQ-native.
+- The repository is still docs-first and built around post-quantum assumptions from genesis.
 - The Rust workspace contains real crates for fixtures, primitives, crypto, state, execution, mempool, consensus, network boundaries, and the thin `shell-cli` harness.
 - `crates/shell-cli/` is a local reference harness crate, not a user-facing node.
 - Fixtures live in both `vectors/` and `crates/shell-fixtures/`, with 58 repository-local vectors currently exercising the documented contracts.
@@ -25,7 +25,7 @@ Prove a local end-to-end reference flow from repository-local docs, specs, fixtu
 - documenting stable operator or RPC behavior,
 - implying multi-node networking or operator lifecycle support,
 - freezing protocol details that still need spec-first iteration,
-- adding legacy migration assumptions that fight the PQ-native direction.
+- adding legacy migration assumptions that fight the post-quantum design direction.
 
 ## Phase Roadmap
 
@@ -34,7 +34,7 @@ Prove a local end-to-end reference flow from repository-local docs, specs, fixtu
 | **docs-and-scaffold** | Lock protocol shape, crate boundaries, validation order, and fixture ownership. | Docs, specs, and workspace scaffolding agree closely enough to support a local reference flow. | Do not overstate maturity or ship operator/runtime claims before the harness exists. |
 | **MVP** | Prove the protocol end to end locally. | Local block and transaction flow works against documented fixtures, with `shell-cli` limited to thin fixture-runner and local-wiring tasks if it exists. | Do not market it as production-ready, treat `shell-cli` as operator/RPC surface, or optimize away clarity. |
 | **Testnet** | Exercise adversarial networking and operator use. | Multi-node behavior and operator workflows are tested under stress. | Do not make mainnet promises or freeze unstable surfaces. |
-| **Mainnet** | Launch a stable production chain with native PQ assumptions from genesis. | Network behavior, releases, and operator procedures are stable enough for production. | Do not dilute the PQ-first model into a migration retrofit. |
+| **Mainnet** | Launch a stable production chain with post-quantum assumptions from genesis. | Network behavior, releases, and operator procedures are stable enough for production. | Do not dilute the post-quantum design into a migration retrofit. |
 
 ## Recommended Reading Path
 
@@ -50,7 +50,7 @@ If you are starting fresh, use the repository in this order:
 8. `specs/testing-vectors.md` for fixture planning and invariant ownership
 9. `docs/contributing.md` before opening a change
 
-If terms like SSZ, witness sidecars, or PQ authorization are new, read them here as shorthand for canonical SimpleSerialize encoding, proof-heavy side data kept separate from executable envelopes, and post-quantum-capable signature handling.
+If terms like SSZ, witness sidecars, or post-quantum authorization are new, read them here as shorthand for canonical SimpleSerialize encoding, proof-heavy side data kept separate from executable envelopes, and post-quantum-capable signature handling.
 
 ## Workspace Overview
 
@@ -86,4 +86,4 @@ Before opening a change, confirm that:
 - planned components are labeled as planned,
 - current limits are stated honestly,
 - docs and specs still agree on phase, scope, and ownership,
-- the change reinforces a docs-first, PQ-native chain design rather than a migration retrofit.
+- the change reinforces a docs-first, post-quantum design rather than a migration retrofit.

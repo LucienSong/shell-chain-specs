@@ -17,7 +17,7 @@
 | **docs-and-scaffold** | Lock conceptual crate boundaries, object ownership, and validation entry points. |
 | **MVP** | Prove those contracts work together in a local end-to-end reference flow, with `shell-cli` kept as thin harness glue for fixtures, adapters, and local wiring only. |
 | **Testnet** | Add operator and networking surfaces that survive adversarial use. |
-| **Mainnet** | Freeze production-facing APIs only after the PQ-native protocol is operationally credible. |
+| **Mainnet** | Freeze production-facing APIs only after the post-quantum protocol design is operationally credible. |
 
 ## Planned Public Surface by Area
 
