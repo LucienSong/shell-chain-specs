@@ -405,7 +405,7 @@ jobs:
           results='${{ toJSON(needs) }}'
           failed=0
 
-          for job in format lint test docs security_audit build commit_message_check pr_description_check; do
+          for job in format lint test docs security-audit build commit-message-check pr-description-check; do
             result=$(echo "$results" | python3 -c "
           import sys, json
           data = json.load(sys.stdin)
